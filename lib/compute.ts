@@ -247,7 +247,7 @@ export function buildValidators(
       const focalPerValidator: (number | null)[] = [];
       validatorNames.forEach((validator, vi) => {
         const entry = scores.find(
-          (s) => s.track === track && s.rank === rank && s.validator === validator
+          (s) => s.track === track && s.office_code === office.code && s.validator === validator
         );
         const officeScores = entry ? entry.officeScores : [null, null, null, null];
         const focalScores = entry ? entry.focalScores : [null, null, null, null, null];

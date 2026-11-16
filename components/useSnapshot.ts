@@ -17,7 +17,8 @@ export function useSnapshot() {
     try {
       const res = await fetch("/api/snapshot", { cache: "no-store" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not load the sheet.");
+      if (!res.ok)
+        throw new Error(data.error || "Could not load program data.");
       const json = JSON.stringify(data);
       if (json !== prevJson.current) {
         prevJson.current = json;
@@ -26,7 +27,7 @@ export function useSnapshot() {
       setLastSynced(new Date());
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load the sheet.");
+      setError(e instanceof Error ? e.message : "Could not load program data.");
     } finally {
       setLoading(false);
     }
@@ -47,7 +48,15 @@ export function useSnapshot() {
     };
   }, [fetchNow]);
 
-  return { snap, loading, error, lastSynced, refresh: fetchNow, saving, setSaving };
+  return {
+    snap,
+    loading,
+    error,
+    lastSynced,
+    refresh: fetchNow,
+    saving,
+    setSaving,
+  };
 }
 
 export function freshnessText(lastSynced: Date | null): string {

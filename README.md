@@ -8,6 +8,33 @@ workbook; monthly inputs and validator scores start empty.
 
 ## How it works
 
+The workspace has a responsive sidebar and a progress dashboard. Use **Monthly
+entry** to choose an office and criterion, enter January–October values, preview
+calculated rates, and save. Blank months mean no data and clear a previously
+saved month. **Validation** evaluates one top-five office and validator at a time,
+with separate office and focal-person ratings. Rankings and final results offer
+track filters and CSV exports.
+
+**Offices & people** lets you search by office or person, edit focal names and
+positions, and save changed offices together. Focal-person names appear in the
+final results with their office beneath them. **Program settings** groups
+validators, evaluation weights, and scoring rules into separate tabs and checks
+weight totals before saving. **Customize** saves accent color, display density,
+and dashboard visibility preferences in the current browser.
+
+**Working days** uses the supplied [2026 PGLU calendar](https://docs.google.com/spreadsheets/d/1zhifhQ85bDP2kxqSDgMkRNZFkOCHMuMx/edit?gid=509378758).
+The 365 daily records are imported into `working_days` on first use; existing
+records are preserved. Timeliness counts working days from release through
+receipt, inclusive of both dates, using the calendar's holiday, suspension, and
+four-day-week flags. Monthly entry stores both dates in `timeliness_dates` and
+saves the calculated day count atomically with the monthly score. You can also
+enter a day count directly. The reference import is a snapshot of the sheet on
+2026-11-16, not a live Google Sheets sync.
+
+Run `npx tsx scripts/verify-working-days.ts` to verify source coverage, monthly
+counts, inclusive counting, and missing/out-of-range date handling. Existing
+scoring and ranking vectors remain available via `npm run verify:vectors`.
+
 - `GET /api/snapshot` — reads the Turso tables, computes all monthly rates,
   Initial totals and ranks, the top 5 per track, validator averages and
   Final results, and returns one JSON snapshot. Server-side in-memory cache,

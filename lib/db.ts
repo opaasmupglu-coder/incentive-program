@@ -2,6 +2,7 @@
 // The app computes everything itself from the Turso tables; the snapshot
 // shape matches what the UI pages already expect.
 import { getTurso, missingEnv } from "./turso";
+import { ensureCalendar } from "./calendar";
 import {
   assignRanks,
   buildChecks,
@@ -56,12 +57,28 @@ function toSettingsObject(map: SettingsMap): Settings {
     return Number.isFinite(v) ? v : 0;
   };
   return {
-    flWeights: [n("fl_res_weight"), n("fl_coll_weight"), n("fl_gpr_weight"), n("fl_time_weight")],
-    nflWeights: [n("nf_res_weight"), n("nf_coll_weight"), n("nf_gpr_weight"), n("nf_time_weight")],
+    flWeights: [
+      n("fl_res_weight"),
+      n("fl_coll_weight"),
+      n("fl_gpr_weight"),
+      n("fl_time_weight"),
+    ],
+    nflWeights: [
+      n("nf_res_weight"),
+      n("nf_coll_weight"),
+      n("nf_gpr_weight"),
+      n("nf_time_weight"),
+    ],
     flTotal:
-      n("fl_res_weight") + n("fl_coll_weight") + n("fl_gpr_weight") + n("fl_time_weight"),
+      n("fl_res_weight") +
+      n("fl_coll_weight") +
+      n("fl_gpr_weight") +
+      n("fl_time_weight"),
     nflTotal:
-      n("nf_res_weight") + n("nf_coll_weight") + n("nf_gpr_weight") + n("nf_time_weight"),
+      n("nf_res_weight") +
+      n("nf_coll_weight") +
+      n("nf_gpr_weight") +
+      n("nf_time_weight"),
     finalInitialWeight: n("final_initial_weight"),
     sampleConstant: n("sample_constant"),
     minFormsFL: n("min_forms_fl"),
@@ -76,7 +93,12 @@ function toSettingsObject(map: SettingsMap): Settings {
       n("time_band_11_15"),
       n("time_band_16_plus"),
     ],
-    officeItemWeights: [n("office_w_car"), n("office_w_onsite"), n("office_w_best"), n("office_w_interview")],
+    officeItemWeights: [
+      n("office_w_car"),
+      n("office_w_onsite"),
+      n("office_w_best"),
+      n("office_w_interview"),
+    ],
     focalItemWeights: [
       n("focal_w_ccarta"),
       n("focal_w_innovation"),
@@ -84,10 +106,22 @@ function toSettingsObject(map: SettingsMap): Settings {
       n("focal_w_prof"),
       n("focal_w_comms"),
     ],
-    officeSubtotal: n("office_w_car") + n("office_w_onsite") + n("office_w_best") + n("office_w_interview"),
+    officeSubtotal:
+      n("office_w_car") +
+      n("office_w_onsite") +
+      n("office_w_best") +
+      n("office_w_interview"),
     focalSubtotal:
-      n("focal_w_ccarta") + n("focal_w_innovation") + n("focal_w_responsive") + n("focal_w_prof") + n("focal_w_comms"),
-    validatorNames: [map["validator_1"] || "", map["validator_2"] || "", map["validator_3"] || ""],
+      n("focal_w_ccarta") +
+      n("focal_w_innovation") +
+      n("focal_w_responsive") +
+      n("focal_w_prof") +
+      n("focal_w_comms"),
+    validatorNames: [
+      map["validator_1"] || "",
+      map["validator_2"] || "",
+      map["validator_3"] || "",
+    ],
   };
 }
 
@@ -97,18 +131,39 @@ async function fetchSnapshot(): Promise<Snapshot> {
   const db = getTurso();
   if (!db) return emptySnapshot(["TURSO_DATABASE_URL"]);
 
-  const [officesRes, settingsRes, resRes, collRes, gprRes, timeRes, scoresRes, prevRes, prizesRes] =
-    await Promise.all([
-      db.execute("SELECT code, short, full_name, track, focal_name, focal_position, notes, sort_order FROM offices ORDER BY sort_order"),
-      db.execute("SELECT key, value FROM settings"),
-      db.execute("SELECT office_code, month, acted, plans FROM monthly_resolution"),
-      db.execute("SELECT office_code, month, forms, clients FROM monthly_collection"),
-      db.execute("SELECT office_code, month, gpr FROM monthly_gpr"),
-      db.execute("SELECT office_code, month, days FROM monthly_timeliness"),
-      db.execute("SELECT track, rank, validator, office_code, car, onsite, best, interview, ccarta, innovation, responsive, prof, comms FROM validator_scores"),
-      db.execute("SELECT validator, office_code, car, onsite, best, interview, ccarta, innovation, responsive, prof, comms FROM prev_scores ORDER BY validator, office_code"),
-      db.execute("SELECT office_code, item, focal_name, focal_position, status, notes FROM prizes ORDER BY office_code, item"),
-    ]);
+  const [
+    officesRes,
+    settingsRes,
+    resRes,
+    collRes,
+    gprRes,
+    timeRes,
+    scoresRes,
+    prevRes,
+    prizesRes,
+  ] = await Promise.all([
+    db.execute(
+      "SELECT code, short, full_name, track, focal_name, focal_position, notes, sort_order FROM offices ORDER BY sort_order",
+    ),
+    db.execute("SELECT key, value FROM settings"),
+    db.execute(
+      "SELECT office_code, month, acted, plans FROM monthly_resolution",
+    ),
+    db.execute(
+      "SELECT office_code, month, forms, clients FROM monthly_collection",
+    ),
+    db.execute("SELECT office_code, month, gpr FROM monthly_gpr"),
+    db.execute("SELECT office_code, month, days FROM monthly_timeliness"),
+    db.execute(
+      "SELECT track, rank, validator, office_code, car, onsite, best, interview, ccarta, innovation, responsive, prof, comms FROM validator_scores",
+    ),
+    db.execute(
+      "SELECT validator, office_code, car, onsite, best, interview, ccarta, innovation, responsive, prof, comms FROM prev_scores ORDER BY validator, office_code",
+    ),
+    db.execute(
+      "SELECT office_code, item, focal_name, focal_position, status, notes FROM prizes ORDER BY office_code, item",
+    ),
+  ]);
 
   const offices: Office[] = officesRes.rows.map((r) => ({
     code: String(r.code),
@@ -122,9 +177,10 @@ async function fetchSnapshot(): Promise<Snapshot> {
   const sortOrder = new Map(offices.map((o, i) => [o.code, i]));
 
   const settingsMap: SettingsMap = {};
-  for (const r of settingsRes.rows) settingsMap[String(r.key)] = String(r.value ?? "");
+  for (const r of settingsRes.rows)
+    settingsMap[String(r.key)] = String(r.value ?? "");
 
-  const byOffice = <T,>(rows: { office_code: unknown }[]): Map<string, T[]> => {
+  const byOffice = <T>(rows: { office_code: unknown }[]): Map<string, T[]> => {
     const m = new Map<string, T[]>();
     for (const r of rows as unknown as T[]) {
       const code = String((r as { office_code: unknown }).office_code);
@@ -133,26 +189,60 @@ async function fetchSnapshot(): Promise<Snapshot> {
     }
     return m;
   };
-  const resByOffice = byOffice<{ office_code: string; month: number; acted: number | null; plans: number | null }>(resRes.rows as never);
-  const collByOffice = byOffice<{ office_code: string; month: number; forms: number | null; clients: number | null }>(collRes.rows as never);
-  const gprByOffice = byOffice<{ office_code: string; month: number; gpr: number | null }>(gprRes.rows as never);
-  const timeByOffice = byOffice<{ office_code: string; month: number; days: number | null }>(timeRes.rows as never);
+  const resByOffice = byOffice<{
+    office_code: string;
+    month: number;
+    acted: number | null;
+    plans: number | null;
+  }>(resRes.rows as never);
+  const collByOffice = byOffice<{
+    office_code: string;
+    month: number;
+    forms: number | null;
+    clients: number | null;
+  }>(collRes.rows as never);
+  const gprByOffice = byOffice<{
+    office_code: string;
+    month: number;
+    gpr: number | null;
+  }>(gprRes.rows as never);
+  const timeByOffice = byOffice<{
+    office_code: string;
+    month: number;
+    days: number | null;
+  }>(timeRes.rows as never);
 
   const toInput = (office: Office): MonthlyInput => {
-    const res = new Map<number, { acted: number | null; plans: number | null }>();
-    const coll = new Map<number, { forms: number | null; clients: number | null }>();
+    const res = new Map<
+      number,
+      { acted: number | null; plans: number | null }
+    >();
+    const coll = new Map<
+      number,
+      { forms: number | null; clients: number | null }
+    >();
     const gpr = new Map<number, number | null>();
     const time = new Map<number, number | null>();
-    for (const r of resByOffice.get(office.code) || []) res.set(Number(r.month), { acted: r.acted, plans: r.plans });
-    for (const r of collByOffice.get(office.code) || []) coll.set(Number(r.month), { forms: r.forms, clients: r.clients });
-    for (const r of gprByOffice.get(office.code) || []) gpr.set(Number(r.month), r.gpr);
-    for (const r of timeByOffice.get(office.code) || []) time.set(Number(r.month), r.days);
+    for (const r of resByOffice.get(office.code) || [])
+      res.set(Number(r.month), { acted: r.acted, plans: r.plans });
+    for (const r of collByOffice.get(office.code) || [])
+      coll.set(Number(r.month), { forms: r.forms, clients: r.clients });
+    for (const r of gprByOffice.get(office.code) || [])
+      gpr.set(Number(r.month), r.gpr);
+    for (const r of timeByOffice.get(office.code) || [])
+      time.set(Number(r.month), r.days);
     return { resolution: res, collection: coll, gpr, timeliness: time };
   };
 
-  const computed = offices.map((o) => computeOffice(o, toInput(o), settingsMap));
-  const initialFL = computed.filter((c) => c.track === "Frontline").map((c) => c.initial);
-  const initialNFL = computed.filter((c) => c.track === "Non-frontline").map((c) => c.initial);
+  const computed = offices.map((o) =>
+    computeOffice(o, toInput(o), settingsMap),
+  );
+  const initialFL = computed
+    .filter((c) => c.track === "Frontline")
+    .map((c) => c.initial);
+  const initialNFL = computed
+    .filter((c) => c.track === "Non-frontline")
+    .map((c) => c.initial);
   assignRanks(initialFL, sortOrder);
   assignRanks(initialNFL, sortOrder);
 
@@ -170,23 +260,45 @@ async function fetchSnapshot(): Promise<Snapshot> {
     rank: Number(r.rank),
     validator: String(r.validator),
     office_code: String(r.office_code),
-    officeScores: [r.car, r.onsite, r.best, r.interview].map((v) => (v === null ? null : Number(v))),
-    focalScores: [r.ccarta, r.innovation, r.responsive, r.prof, r.comms].map((v) =>
-      v === null ? null : Number(v)
+    officeScores: [r.car, r.onsite, r.best, r.interview].map((v) =>
+      v === null ? null : Number(v),
+    ),
+    focalScores: [r.ccarta, r.innovation, r.responsive, r.prof, r.comms].map(
+      (v) => (v === null ? null : Number(v)),
     ),
   }));
 
-  const { validators, validatorAvg } = buildValidators(top5FL, top5NFL, settingsMap, scoreEntries);
+  const { validators, validatorAvg } = buildValidators(
+    top5FL,
+    top5NFL,
+    settingsMap,
+    scoreEntries,
+  );
   const finalFL = buildFinals(top5FL, validatorAvg.slice(0, 5), settingsMap);
   const finalNFL = buildFinals(top5NFL, validatorAvg.slice(5, 10), settingsMap);
+  for (const row of [...finalFL.focals, ...finalNFL.focals]) {
+    const office = offices.find((o) => o.code === row.code);
+    row.officeName = office?.name || row.name;
+    row.name = office?.focal || "Focal person not assigned";
+  }
 
   const prevScores: PrevScoreRow[] = prevRes.rows.map((r) => ({
     validator: String(r.validator),
     code: String(r.office_code),
-    office: offices.find((o) => o.code === String(r.office_code))?.name || String(r.office_code),
-    scores: [r.car, r.onsite, r.best, r.interview, r.ccarta, r.innovation, r.responsive, r.prof, r.comms].map((v) =>
-      v === null ? null : Number(v)
-    ),
+    office:
+      offices.find((o) => o.code === String(r.office_code))?.name ||
+      String(r.office_code),
+    scores: [
+      r.car,
+      r.onsite,
+      r.best,
+      r.interview,
+      r.ccarta,
+      r.innovation,
+      r.responsive,
+      r.prof,
+      r.comms,
+    ].map((v) => (v === null ? null : Number(v))),
   }));
 
   const prizeByOffice = new Map<string, PrizeRow>();
@@ -222,15 +334,27 @@ async function fetchSnapshot(): Promise<Snapshot> {
   for (const rows of [resRes.rows, collRes.rows, gprRes.rows, timeRes.rows]) {
     for (const r of rows) {
       for (const [k, v] of Object.entries(r)) {
-        if (k !== "office_code" && k !== "month" && v !== null && v !== undefined) inputCellsFilled++;
+        if (
+          k !== "office_code" &&
+          k !== "month" &&
+          v !== null &&
+          v !== undefined
+        )
+          inputCellsFilled++;
       }
     }
   }
 
   const top5Codes = new Set([...top5FL, ...top5NFL].map((r) => r.code));
-  const currentScores = scoreEntries.filter((s) => top5Codes.has(s.office_code));
-  const ratedOffice = currentScores.filter((s) => s.officeScores.every((v) => v !== null)).length;
-  const ratedFocal = currentScores.filter((s) => s.focalScores.every((v) => v !== null)).length;
+  const currentScores = scoreEntries.filter((s) =>
+    top5Codes.has(s.office_code),
+  );
+  const ratedOffice = currentScores.filter((s) =>
+    s.officeScores.every((v) => v !== null),
+  ).length;
+  const ratedFocal = currentScores.filter((s) =>
+    s.focalScores.every((v) => v !== null),
+  ).length;
 
   const checks = buildChecks({
     settings: settingsMap,
@@ -319,21 +443,41 @@ const MONTHLY_TABLES: Record<Criterion, { table: string; cols: string[] }> = {
 export async function writeMonthly(
   code: string,
   criterion: Criterion,
-  months: { first: (number | null)[]; second?: (number | null)[] }
+  months: {
+    first: (number | null)[];
+    second?: (number | null)[];
+    dates?: { released: string; received: string }[];
+  },
 ): Promise<void> {
   const db = getTurso();
-  if (!db) throw new Error("Database is not connected (missing Turso env vars).");
+  if (!db)
+    throw new Error("Database is not connected (missing Turso env vars).");
   const stmts = buildMonthlyStatements(code, criterion, months);
-  for (const s of stmts) {
-    await db.execute({ sql: s.sql, args: s.args });
+  if (criterion === "timeliness" && months.dates) {
+    await ensureCalendar();
+    for (let i = 0; i < 10; i++) {
+      const date = months.dates[i];
+      stmts.push(
+        date?.released && date?.received
+          ? {
+              sql: "INSERT INTO timeliness_dates (office_code, month, released, received) VALUES (?, ?, ?, ?) ON CONFLICT(office_code, month) DO UPDATE SET released = excluded.released, received = excluded.received",
+              args: [code, i + 1, date.released, date.received],
+            }
+          : {
+              sql: "DELETE FROM timeliness_dates WHERE office_code = ? AND month = ?",
+              args: [code, i + 1],
+            },
+      );
+    }
   }
+  await db.batch(stmts, "write");
   invalidateSnapshot();
 }
 
 function buildMonthlyStatements(
   code: string,
   criterion: Criterion,
-  months: { first: (number | null)[]; second?: (number | null)[] }
+  months: { first: (number | null)[]; second?: (number | null)[] },
 ): { sql: string; args: (string | number | null)[] }[] {
   const { table, cols } = MONTHLY_TABLES[criterion];
   const first = months.first.slice(0, 10);
@@ -342,9 +486,13 @@ function buildMonthlyStatements(
   for (let m = 1; m <= 10; m++) {
     const v1 = first[m - 1] ?? null;
     const v2 = second[m - 1] ?? null;
-    const allBlank = cols.length === 1 ? v1 === null : v1 === null && v2 === null;
+    const allBlank =
+      cols.length === 1 ? v1 === null : v1 === null && v2 === null;
     if (allBlank) {
-      out.push({ sql: `DELETE FROM ${table} WHERE office_code = ? AND month = ?`, args: [code, m] });
+      out.push({
+        sql: `DELETE FROM ${table} WHERE office_code = ? AND month = ?`,
+        args: [code, m],
+      });
     } else if (cols.length === 1) {
       out.push({
         sql:
@@ -367,39 +515,68 @@ function buildMonthlyStatements(
 export async function writeScores(input: {
   track: "Frontline" | "Non-frontline";
   rank: number;
+  code?: string;
   validator: string;
   officeScores: (number | null)[];
   focalScores: (number | null)[];
 }): Promise<void> {
   const db = getTurso();
-  if (!db) throw new Error("Database is not connected (missing Turso env vars).");
+  if (!db)
+    throw new Error("Database is not connected (missing Turso env vars).");
   const snap = await getSnapshot();
-  const top5 = input.track === "Frontline" ? snap.validatorAvg.slice(0, 5) : snap.validatorAvg.slice(5, 10);
+  const top5 =
+    input.track === "Frontline"
+      ? snap.validatorAvg.slice(0, 5)
+      : snap.validatorAvg.slice(5, 10);
   const office = top5[input.rank - 1];
-  if (!office || !office.code) throw new Error(`No office at rank ${input.rank} for ${input.track}.`);
+  if (!office || !office.code)
+    throw new Error(`No office at rank ${input.rank} for ${input.track}.`);
+  if (input.code && input.code !== office.code) throw new Error("RANK_CHANGED");
   const [car, onsite, best, interview] = input.officeScores;
   const [ccarta, innovation, responsive, prof, comms] = input.focalScores;
-  await db.execute({
-    sql:
-      `INSERT INTO validator_scores (track, rank, validator, office_code, car, onsite, best, interview, ccarta, innovation, responsive, prof, comms) ` +
-      `VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ` +
-      `ON CONFLICT(track, rank, validator) DO UPDATE SET office_code = excluded.office_code, car = excluded.car, onsite = excluded.onsite, best = excluded.best, interview = excluded.interview, ccarta = excluded.ccarta, innovation = excluded.innovation, responsive = excluded.responsive, prof = excluded.prof, comms = excluded.comms`,
-    args: [
-      input.track,
-      input.rank,
-      input.validator,
-      office.code,
-      car,
-      onsite,
-      best,
-      interview,
-      ccarta,
-      innovation,
-      responsive,
-      prof,
-      comms,
-    ],
-  });
+  // Legacy schema keys scores by rank. Keep a stable storage slot per
+  // office/validator so saving after a re-ranking never overwrites another office.
+  const transaction = await db.transaction("write");
+  try {
+    const existing = await transaction.execute({
+      sql: "SELECT rank FROM validator_scores WHERE track = ? AND validator = ? AND office_code = ? ORDER BY rank DESC LIMIT 1",
+      args: [input.track, input.validator, office.code],
+    });
+    const highest = existing.rows.length
+      ? null
+      : await transaction.execute({
+          sql: "SELECT COALESCE(MAX(rank), 0) + 1 AS slot FROM validator_scores WHERE track = ? AND validator = ?",
+          args: [input.track, input.validator],
+        });
+    const slot = Number(existing.rows[0]?.rank ?? highest!.rows[0].slot);
+    await transaction.execute({
+      sql:
+        `INSERT INTO validator_scores (track, rank, validator, office_code, car, onsite, best, interview, ccarta, innovation, responsive, prof, comms) ` +
+        `VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ` +
+        `ON CONFLICT(track, rank, validator) DO UPDATE SET office_code = excluded.office_code, car = excluded.car, onsite = excluded.onsite, best = excluded.best, interview = excluded.interview, ccarta = excluded.ccarta, innovation = excluded.innovation, responsive = excluded.responsive, prof = excluded.prof, comms = excluded.comms`,
+      args: [
+        input.track,
+        slot,
+        input.validator,
+        office.code,
+        car,
+        onsite,
+        best,
+        interview,
+        ccarta,
+        innovation,
+        responsive,
+        prof,
+        comms,
+      ],
+    });
+    await transaction.commit();
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  } finally {
+    transaction.close();
+  }
   invalidateSnapshot();
 }
 
@@ -439,9 +616,12 @@ export const SETTINGS_KEY_MAP: Record<string, string> = {
   itemCommunication: "focal_w_comms",
 };
 
-export async function writeSettings(cells: { key: string; value: string | number }[]): Promise<void> {
+export async function writeSettings(
+  cells: { key: string; value: string | number }[],
+): Promise<void> {
   const db = getTurso();
-  if (!db) throw new Error("Database is not connected (missing Turso env vars).");
+  if (!db)
+    throw new Error("Database is not connected (missing Turso env vars).");
   for (const c of cells) {
     const dbKey = SETTINGS_KEY_MAP[c.key];
     if (!dbKey) throw new Error(`Not an editable setting: ${c.key}`);
@@ -458,15 +638,17 @@ export async function writeSettings(cells: { key: string; value: string | number
  * clears that field (blank = no focal person assigned yet).
  */
 export async function writeOfficeFocals(
-  rows: { code: string; focal: string; focalPosition: string }[]
+  rows: { code: string; focal: string; focalPosition: string }[],
 ): Promise<void> {
   const db = getTurso();
-  if (!db) throw new Error("Database is not connected (missing Turso env vars).");
-  for (const r of rows) {
-    await db.execute({
+  if (!db)
+    throw new Error("Database is not connected (missing Turso env vars).");
+  await db.batch(
+    rows.map((r) => ({
       sql: "UPDATE offices SET focal_name = ?, focal_position = ? WHERE code = ?",
       args: [r.focal, r.focalPosition, r.code],
-    });
-  }
+    })),
+    "write",
+  );
   invalidateSnapshot();
 }

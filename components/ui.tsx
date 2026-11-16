@@ -16,7 +16,7 @@ export function PageHead({
     <div className="page-head">
       <div>
         <p className="kicker">{kicker}</p>
-        <h2>{title}</h2>
+        <h1>{title}</h1>
         <p className="lede">{description}</p>
       </div>
       {right && <div>{right}</div>}
@@ -46,7 +46,11 @@ export function SectionHead({
 }
 
 /** Loading state, in the same system as everything else. */
-export function LoadingState({ what = "Loading the latest numbers" }: { what?: string }) {
+export function LoadingState({
+  what = "Loading the latest numbers",
+}: {
+  what?: string;
+}) {
   return (
     <div className="state-block" role="status">
       <p className="kicker">Please wait</p>
@@ -72,21 +76,29 @@ export function NotConnected({ missingEnv }: { missingEnv?: string[] }) {
       <span className="notice-kicker">Not connected</span>
       <b>Not connected to the database yet.</b>
       <p>
-        Add these environment variables in Vercel (Project → Settings → Environment Variables), then redeploy:
+        Your program data isn’t available yet. Ask your program administrator to
+        connect the database.
       </p>
-      {missingEnv && missingEnv.length > 0 && (
-        <ul>
-          {missingEnv.map((m) => (
-            <li key={m}>
-              <code>{m}</code>
-            </li>
-          ))}
-        </ul>
-      )}
-      <p>
-        <code>TURSO_DATABASE_URL</code> is the Turso database URL and <code>TURSO_AUTH_TOKEN</code> is its auth
-        token.
-      </p>
+      <details>
+        <summary>Administrator setup details</summary>
+        <p>
+          Set the database connection variables in your hosting environment,
+          then restart the app.
+        </p>
+        {missingEnv && missingEnv.length > 0 && (
+          <ul>
+            {missingEnv.map((m) => (
+              <li key={m}>
+                <code>{m}</code>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p>
+          <code>TURSO_DATABASE_URL</code> is the Turso database URL and{" "}
+          <code>TURSO_AUTH_TOKEN</code> is its auth token.
+        </p>
+      </details>
     </div>
   );
 }

@@ -84,6 +84,7 @@ export type ValidatorAvgRow = {
 export type FinalRow = {
   code: string;
   name: string;
+  officeName?: string;
   initialTotal: number | null;
   initial60: number | null;
   validatorAvg: number | null;
@@ -147,7 +148,12 @@ export const MONTHS = [
   "October",
 ] as const;
 
-export const OFFICE_ITEMS = ["CAR", "Onsite Visit", "Best Practices", "Interview"];
+export const OFFICE_ITEMS = [
+  "CAR",
+  "Onsite Visit",
+  "Best Practices",
+  "Interview",
+];
 export const FOCAL_ITEMS = [
   "CC & ARTA Compliance",
   "Innovation & Initiative",

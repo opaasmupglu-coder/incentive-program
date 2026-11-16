@@ -1,47 +1,40 @@
 import type { Metadata } from "next";
-import { Fraunces, IBM_Plex_Sans } from "next/font/google";
-import Nav from "@/components/Nav";
+import Nav, { TopBar } from "@/components/Nav";
+import PreferencesProvider from "@/components/Preferences";
 import "./globals.css";
-
 export const metadata: Metadata = {
-  title: "Incentive Program — 2026 Customer Feedback",
+  title: "Feedback — 2026 Incentive Program",
   description:
-    "Enter monthly ratings, validator scores, and view rankings for the 2026 Customer Feedback Incentive Program.",
+    "The customer feedback workspace for the Provincial Government of La Union. Enter scores, track progress, and recognize excellent public service.",
 };
-
-// Editorial pairing: Fraunces (display serif) + IBM Plex Sans (body).
-// Self-hosted by next/font — bundled at build time, no runtime requests.
-const display = Fraunces({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  variable: "--font-display",
-  display: "swap",
-});
-const body = IBM_Plex_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-body",
-  display: "swap",
-});
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable}`}>
+    <html lang="en">
       <body>
-        <header className="site-header">
-          <div className="container header-inner">
-            <p className="kicker">Provincial Government of La Union</p>
-            <h1>2026 Customer Feedback Incentive Program</h1>
-            <p className="site-sub">Monthly ratings, validator scores, rankings and finals — from the program database.</p>
-            <Nav />
+        <PreferencesProvider>
+          <a href="#main-content" className="skip-link">
+            Skip to content
+          </a>
+          <Nav />
+          <div className="workspace">
+            <TopBar />
+            <main className="container" id="main-content">
+              {children}
+            </main>
+            <footer className="footer">
+              <span>2026 Customer Feedback Incentive Program</span>
+              <span>
+                Provincial Government of La Union{" "}
+                <span className="footer-dot">•</span> Made for better public
+                service
+              </span>
+            </footer>
           </div>
-        </header>
-        <main className="container">{children}</main>
-        <footer className="footer">
-          <div className="container">
-            The database is the source of truth — every number here comes from it, and every save writes back to it.
-          </div>
-        </footer>
+        </PreferencesProvider>
       </body>
     </html>
   );

@@ -14,3 +14,8 @@ npm-debug.log*
 .DS_Store
 local.db
 .env.local
+
+# Local verification artifacts
+.local/
+*.tsbuildinfo
+working-days-source.csv

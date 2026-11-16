@@ -1,247 +1,381 @@
 "use client";
-import { useMemo, useState } from "react";
-import { FOCAL_ITEMS, OFFICE_ITEMS } from "@/lib/types";
-import { fmtNum, freshnessText, useSnapshot } from "@/components/useSnapshot";
-import { ErrorState, LoadingState, NotConnected, PageHead, SectionHead } from "@/components/ui";
-
-function ScoreSelect({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: number | null;
-  onChange: (v: number | null) => void;
-}) {
-  return (
-    <div>
-      <label style={{ margin: "6px 0 2px", fontSize: 13 }}>{label}</label>
-      <select
-        value={value === null ? "" : String(value)}
-        onChange={(e) => onChange(e.target.value === "" ? null : parseInt(e.target.value, 10))}
-      >
-        <option value="">—</option>
-        {[1, 2, 3, 4, 5].map((n) => (
-          <option key={n} value={n}>
-            {n}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { OFFICE_ITEMS, FOCAL_ITEMS } from "@/lib/types";
+import { officeTotal, focalTotal } from "@/lib/compute";
+import { fmtPct, useSnapshot } from "@/components/useSnapshot";
+import {
+  ErrorState,
+  LoadingState,
+  NotConnected,
+  PageHead,
+} from "@/components/ui";
+import Icon from "@/components/Icon";
+type Draft = { office: (number | null)[]; focal: (number | null)[] };
 export default function ScoresPage() {
-  const { snap, loading, error, lastSynced, refresh, setSaving } = useSnapshot();
-  const [track, setTrack] = useState<"Frontline" | "Non-frontline">("Frontline");
-  const [drafts, setDrafts] = useState<Record<number, { office: (number | null)[]; focal: (number | null)[] }>>({});
-  const [busyRow, setBusyRow] = useState<number | null>(null);
-  const [msg, setMsg] = useState<{ row: number; text: string; ok: boolean } | null>(null);
-
-  const avgRows = useMemo(
-    () => (snap ? (track === "Frontline" ? snap.validatorAvg.slice(0, 5) : snap.validatorAvg.slice(5, 10)) : []),
-    [snap, track]
+  const { snap, loading, error, refresh, setSaving } = useSnapshot();
+  const [track, setTrack] = useState<"Frontline" | "Non-frontline">(
+    "Frontline",
   );
-  const top5 = useMemo(() => avgRows.filter((r) => r.code), [avgRows]);
-
+  const [selectedOffice, setSelectedOffice] = useState("");
+  const [selectedValidator, setSelectedValidator] = useState("");
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!Object.keys(drafts).length) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [drafts]);
   if (loading) return <LoadingState />;
   if (error) return <ErrorState error={error} />;
-  if (!snap) return <LoadingState what="No data yet" />;
-  if (!snap.connected) {
-    return (
-      <>
-        <PageHead
-          kicker="Section 04"
-          title="Validator scores"
-          description="Score the top 5 offices, 1–5 per item. Blank items stay blank — they don't count as zero."
-          right={<span className="freshness">{freshnessText(lastSynced)}</span>}
-        />
-        <NotConnected missingEnv={snap.missingEnv} />
-      </>
-    );
+  if (!snap) return <LoadingState />;
+  const top5 = (
+    track === "Frontline"
+      ? snap.validatorAvg.slice(0, 5)
+      : snap.validatorAvg.slice(5, 10)
+  ).filter((o) => o.code);
+  const office = top5.find((o) => o.code === selectedOffice) || top5[0];
+  const validatorNames = snap.settings?.validatorNames.filter(Boolean) || [];
+  const validator = validatorNames.includes(selectedValidator)
+    ? selectedValidator
+    : validatorNames[0];
+  const row = snap.validators.find(
+    (v) => v.code === office?.code && v.validator === validator,
+  );
+  const key = `${office?.code}|${validator}`;
+  const draft = drafts[key] || {
+    office: row?.officeScores || Array(4).fill(null),
+    focal: row?.focalScores || Array(5).fill(null),
+  };
+  const filled = [...draft.office, ...draft.focal].filter(
+    (v) => v !== null,
+  ).length;
+  const liveOffice = officeTotal(
+    draft.office,
+    snap.settings?.officeItemWeights || [0.1, 0.1, 0.1, 0.1],
+    snap.settings?.validatorScale || 5,
+  );
+  const liveFocal = focalTotal(
+    draft.focal,
+    snap.settings?.focalItemWeights || [0.1, 0.1, 0.1, 0.05, 0.05],
+    snap.settings?.validatorScale || 5,
+  );
+  function setScore(
+    kind: "office" | "focal",
+    index: number,
+    value: number | null,
+  ) {
+    setDrafts((p) => ({
+      ...p,
+      [key]: {
+        office: [...draft.office],
+        focal: [...draft.focal],
+        [kind]: draft[kind].map((v, i) => (i === index ? value : v)),
+      },
+    }));
+    setMessage(null);
   }
-
-  const validatorNames = (snap.settings?.validatorNames || []).filter(Boolean);
-
-  function draftFor(sheetRow: number, v: { officeScores: (number | null)[]; focalScores: (number | null)[] }) {
-    return (
-      drafts[sheetRow] || {
-        office: [...v.officeScores],
-        focal: [...v.focalScores],
-      }
-    );
-  }
-
-  function setDraft(sheetRow: number, kind: "office" | "focal", idx: number, val: number | null) {
-    setDrafts((prev) => {
-      const base = prev[sheetRow] || { office: [null, null, null, null], focal: [null, null, null, null, null] };
-      const next = { office: [...base.office], focal: [...base.focal] };
-      next[kind][idx] = val;
-      return { ...prev, [sheetRow]: next };
-    });
-  }
-
-  async function saveRow(v: {
-    sheetRow: number;
-    rank: number | null;
-    validator: string;
-    officeScores: (number | null)[];
-    focalScores: (number | null)[];
-  }) {
-    if (v.rank === null) return;
-    setBusyRow(v.sheetRow);
+  async function save() {
+    if (!row || row.rank === null) return;
+    setBusy(true);
     setSaving(true);
-    setMsg(null);
-    const d = draftFor(v.sheetRow, v);
-    const res = await fetch("/api/scores", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        track,
-        rank: v.rank,
-        validator: v.validator,
-        officeScores: d.office,
-        focalScores: d.focal,
-      }),
-    });
-    setBusyRow(null);
-    setSaving(false);
-    if (res.ok) {
-      setMsg({ row: v.sheetRow, text: "Saved to the sheet.", ok: true });
-      setDrafts((prev) => {
-        const next = { ...prev };
-        delete next[v.sheetRow];
+    setMessage(null);
+    try {
+      const res = await fetch("/api/scores", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          track,
+          rank: row.rank,
+          code: office.code,
+          validator,
+          officeScores: draft.office,
+          focalScores: draft.focal,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not save scores.");
+      await refresh();
+      setDrafts((p) => {
+        const next = { ...p };
+        delete next[key];
         return next;
       });
-      await refresh();
-    } else {
-      const data = await res.json().catch(() => ({}));
-      setMsg({ row: v.sheetRow, text: data.error || "Could not save.", ok: false });
+      setMessage({
+        text: `${validator}’s scores saved for ${office?.name}. Progress and final results have been updated.`,
+        ok: true,
+      });
+    } catch (e) {
+      setMessage({
+        text:
+          e instanceof Error ? e.message : "Could not save. Please try again.",
+        ok: false,
+      });
+    } finally {
+      setBusy(false);
+      setSaving(false);
     }
   }
-
   return (
     <>
       <PageHead
-        kicker="Section 04"
-        title="Validator scores"
-        description="Score the top 5 offices, 1–5 per item. Blank items stay blank — they don't count as zero."
-        right={<span className="freshness">{freshnessText(lastSynced)}</span>}
+        kicker="Final evaluation"
+        title="Thoughtful ratings. Fair recognition."
+        description="One office, one validator at a time. Score each item from 1 to 5; totals update as you go."
+        right={
+          <Link className="btn secondary" href="/finals">
+            View final results <Icon name="arrow" size={14} />
+          </Link>
+        }
       />
-
-      <section className="section" aria-labelledby="pick-track">
-        <SectionHead num="01" title="Pick a track" />
-        <div className="section-body">
-          <label htmlFor="track">Track</label>
-          <select id="track" value={track} onChange={(e) => setTrack(e.target.value as typeof track)} style={{ maxWidth: 260 }}>
-            <option value="Frontline">Frontline</option>
-            <option value="Non-frontline">Non-frontline</option>
-          </select>
-        </div>
-      </section>
-
-      {top5.length === 0 && (
-        <div className="notice" role="status">
-          <span className="notice-kicker">Top 5 not ready</span>
-          The top 5 {track === "Frontline" ? "Frontline" : "Non-frontline"} offices aren&apos;t determined yet — enter
-          monthly numbers first so the Initial totals can rank the offices.
-        </div>
-      )}
-
-      {top5.map((avg, idx) => {
-        const rank = avgRows.indexOf(avg) + 1;
-        const rows = snap.validators.filter(
-          (v) => v.code === avg.code && (track === "Frontline" ? v.sheetRow <= 18 : v.sheetRow >= 19)
-        );
-        return (
-          <section className="section" key={avg.code} aria-labelledby={`office-${avg.code}`}>
-            <SectionHead
-              num={String(idx + 2).padStart(2, "0")}
-              title={`#${rank} — ${avg.name}`}
-              note={`Office average ${avg.officeAvg !== null ? fmtNum(avg.officeAvg) : "—"} (${avg.officeRatedCount ?? 0}/3 rated) · Focal average ${avg.focalAvg !== null ? fmtNum(avg.focalAvg) : "—"} (${avg.focalRatedCount ?? 0}/3 rated)`}
-            />
+      {!snap.connected ? (
+        <NotConnected missingEnv={snap.missingEnv} />
+      ) : (
+        <>
+          <section className="section">
+            <div className="section-head">
+              <h3>Your evaluation workspace</h3>
+              <p>Drafts stay here when you switch between offices</p>
+            </div>
             <div className="section-body">
-              {rows.map((v) => {
-                const d = draftFor(v.sheetRow, v);
-                return (
-                  <div className="score-block" key={v.sheetRow}>
-                    <b>{v.validator || "Validator"}</b>{" "}
-                    <span className="sub">
-                      Office total: {v.officeTotal !== null ? fmtNum(v.officeTotal) : "—"} · Focal total:{" "}
-                      {v.focalTotal !== null ? fmtNum(v.focalTotal) : "—"}
-                    </span>
-                    <div className="score-grid">
-                      {OFFICE_ITEMS.map((label, i) => (
-                        <ScoreSelect
-                          key={label}
-                          label={`Office — ${label}`}
-                          value={d.office[i]}
-                          onChange={(val) => setDraft(v.sheetRow, "office", i, val)}
-                        />
-                      ))}
-                      {FOCAL_ITEMS.map((label, i) => (
-                        <ScoreSelect
-                          key={label}
-                          label={`Focal — ${label}`}
-                          value={d.focal[i]}
-                          onChange={(val) => setDraft(v.sheetRow, "focal", i, val)}
-                        />
-                      ))}
-                    </div>
-                    {msg && msg.row === v.sheetRow && (
-                      <div className={`notice ${msg.ok ? "ok" : "error"}`} role={msg.ok ? "status" : "alert"}>
-                        <span className="notice-kicker">{msg.ok ? "Saved" : "Error"}</span>
-                        {msg.text}
-                      </div>
+              <div className="field-row">
+                <div>
+                  <label htmlFor="score-track">Track</label>
+                  <select
+                    id="score-track"
+                    disabled={busy}
+                    value={track}
+                    onChange={(e) => {
+                      setTrack(e.target.value as typeof track);
+                      setSelectedOffice("");
+                      setMessage(null);
+                    }}
+                  >
+                    <option>Frontline</option>
+                    <option>Non-frontline</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="score-office">Top 5 office</label>
+                  <select
+                    id="score-office"
+                    disabled={busy || !top5.length}
+                    value={office?.code || ""}
+                    onChange={(e) => {
+                      setSelectedOffice(e.target.value);
+                      setMessage(null);
+                    }}
+                  >
+                    {!top5.length && (
+                      <option value="">No offices ready yet</option>
                     )}
-                    <button className="btn small" disabled={busyRow === v.sheetRow} onClick={() => saveRow(v)}>
-                      {busyRow === v.sheetRow ? "Saving…" : `Save ${v.validator || "validator"} scores`}
-                    </button>
-                  </div>
-                );
-              })}
+                    {top5.map((o, i) => (
+                      <option key={o.code} value={o.code}>
+                        #{i + 1} · {o.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="score-validator">Validator</label>
+                  <select
+                    id="score-validator"
+                    disabled={busy}
+                    value={validator || ""}
+                    onChange={(e) => {
+                      setSelectedValidator(e.target.value);
+                      setMessage(null);
+                    }}
+                  >
+                    {validatorNames.map((v) => (
+                      <option key={v}>{v}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
           </section>
-        );
-      })}
-
-      {snap.prevScores.length > 0 && (
-        <section className="section" aria-labelledby="prev-scores">
-          <SectionHead num="07" title="Previous round's scores (reference only)" />
-          <div className="section-body">
-            <p className="muted">These came from the old file and are not used by any formula.</p>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Validator</th>
-                    <th>Office</th>
-                    <th className="num">CAR</th>
-                    <th className="num">Onsite</th>
-                    <th className="num">Best</th>
-                    <th className="num">Interview</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {snap.prevScores
-                    .filter((p) => validatorNames.length === 0 || validatorNames.includes(p.validator))
-                    .slice(0, 36)
-                    .map((p, i) => (
-                      <tr key={`${p.validator}-${p.code}-${i}`}>
-                        <td>{p.validator}</td>
-                        <td>{p.office}</td>
-                        {p.scores.slice(0, 4).map((s, j) => (
-                          <td key={j} className="num">
-                            {s ?? "—"}
-                          </td>
+          {!office ? (
+            <div className="empty-state section">
+              <Icon name="check" size={32} />
+              <b>The next stage starts with monthly scores.</b>
+              <p>
+                Offices qualify for validation once all four initial evaluation
+                criteria have data.
+              </p>
+              <Link className="btn" href="/enter">
+                Enter monthly scores <Icon name="arrow" size={15} />
+              </Link>
+            </div>
+          ) : (
+            <>
+              <div className="panel-title" style={{ margin: "24px 0 16px" }}>
+                <div>
+                  <h3>{office.name}</h3>
+                  <p>
+                    {snap.offices.find((o) => o.code === office.code)?.focal ||
+                      "No focal person assigned"}{" "}
+                    · {validator}
+                  </p>
+                </div>
+                <span className={`badge ${filled === 9 ? "green" : "amber"}`}>
+                  {filled}/9 items rated
+                </span>
+              </div>
+              <div className="rating-panels">
+                {[
+                  {
+                    kind: "office" as const,
+                    title: "Office evaluation",
+                    icon: "building",
+                    items: OFFICE_ITEMS,
+                    total: liveOffice,
+                  },
+                  {
+                    kind: "focal" as const,
+                    title: "Focal person evaluation",
+                    icon: "people",
+                    items: FOCAL_ITEMS,
+                    total: liveFocal,
+                  },
+                ].map((group) => (
+                  <section className="section" key={group.kind}>
+                    <div className="section-head">
+                      <Icon name={group.icon} size={17} />
+                      <h3>{group.title}</h3>
+                      <p>{fmtPct(group.total)} weighted score</p>
+                    </div>
+                    <div className="section-body">
+                      <div className="rating-legend">
+                        <span>1 · Lowest</span>
+                        <span>5 · Highest</span>
+                      </div>
+                      {group.items.map((item, i) => (
+                        <fieldset className="rating-item" key={item}>
+                          <legend>{item}</legend>
+                          <div className="rating-buttons">
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <button
+                                key={n}
+                                disabled={busy}
+                                aria-label={`${group.kind === "office" ? "Office" : "Focal person"} ${item}: ${n}`}
+                                aria-pressed={draft[group.kind][i] === n}
+                                className={
+                                  draft[group.kind][i] === n ? "selected" : ""
+                                }
+                                onClick={() => setScore(group.kind, i, n)}
+                              >
+                                {n}
+                              </button>
+                            ))}
+                            <button
+                              className="clear-score"
+                              disabled={busy || draft[group.kind][i] === null}
+                              aria-label={`Clear ${group.kind} ${item} score`}
+                              onClick={() => setScore(group.kind, i, null)}
+                            >
+                              <Icon name="close" size={13} />
+                            </button>
+                          </div>
+                        </fieldset>
+                      ))}
+                      <div className="tip">
+                        <Icon name="help" size={16} />
+                        <p>
+                          Unrated items stay blank. They count as missing, never
+                          as zero.
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+                ))}
+              </div>
+              {message && (
+                <div
+                  className={`notice ${message.ok ? "ok" : "error"}`}
+                  role={message.ok ? "status" : "alert"}
+                >
+                  {message.text}
+                </div>
+              )}
+              <div className="save-bar">
+                <p>
+                  {drafts[key]
+                    ? "Unsaved ratings · you can save a partial evaluation and return later."
+                    : "Select a rating to begin or update this evaluation."}
+                </p>
+                <button
+                  className="btn"
+                  disabled={busy || !drafts[key] || !row}
+                  onClick={save}
+                >
+                  <Icon name="check" size={15} />
+                  {busy ? "Saving…" : "Save validator scores"}
+                </button>
+              </div>
+              <section className="section">
+                <div className="section-head">
+                  <h3>Validation progress · {track}</h3>
+                  <p>Office and focal ratings are tracked separately</p>
+                </div>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Office</th>
+                        {validatorNames.map((v) => (
+                          <th key={v}>{v}</th>
                         ))}
                       </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
+                    </thead>
+                    <tbody>
+                      {top5.map((o) => (
+                        <tr key={o.code}>
+                          <td>
+                            <b>{o.name}</b>
+                          </td>
+                          {validatorNames.map((v) => {
+                            const r = snap.validators.find(
+                              (r) => r.code === o.code && r.validator === v,
+                            );
+                            const count = [
+                              ...(r?.officeScores || []),
+                              ...(r?.focalScores || []),
+                            ].filter((v) => v !== null).length;
+                            return (
+                              <td key={v}>
+                                <button
+                                  className={`progress-rating ${count === 9 ? "complete" : ""}`}
+                                  disabled={busy}
+                                  onClick={() => {
+                                    setSelectedOffice(o.code);
+                                    setSelectedValidator(v);
+                                    setMessage(null);
+                                    window.scrollTo({
+                                      top: 0,
+                                      behavior: "smooth",
+                                    });
+                                  }}
+                                >
+                                  {count}/9 rated{" "}
+                                  <Icon name="arrow" size={12} />
+                                </button>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </>
+          )}
+        </>
       )}
     </>
   );

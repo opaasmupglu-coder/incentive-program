@@ -1,7 +1,13 @@
 "use client";
 import { memo } from "react";
 import { freshnessText, useSnapshot } from "@/components/useSnapshot";
-import { ErrorState, LoadingState, NotConnected, PageHead, SectionHead } from "@/components/ui";
+import {
+  ErrorState,
+  LoadingState,
+  NotConnected,
+  PageHead,
+  SectionHead,
+} from "@/components/ui";
 
 const PrizeTable = memo(function PrizeTable({
   prizes,
@@ -60,7 +66,7 @@ export default function PrizesPage() {
         <PageHead
           kicker="Section 07"
           title="Prizes"
-          description="Tablet and TV tracker, read-only. It is edited on the sheet."
+          description="Track tablet and TV awards for participating offices and their focal persons."
           right={<span className="freshness">{freshnessText(lastSynced)}</span>}
         />
         <NotConnected missingEnv={snap.missingEnv} />
@@ -73,12 +79,16 @@ export default function PrizesPage() {
       <PageHead
         kicker="Section 07"
         title="Prizes"
-        description="Tablet and TV tracker, read-only. It is edited on the sheet."
+        description="Track tablet and TV awards for participating offices and their focal persons."
         right={<span className="freshness">{freshnessText(lastSynced)}</span>}
       />
 
       <section className="section" aria-labelledby="prizes">
-        <SectionHead num="01" title="Prize tracker" note={`${snap.prizes.length} entries`} />
+        <SectionHead
+          num="01"
+          title="Prize tracker"
+          note={`${snap.prizes.length} entries`}
+        />
         <div className="section-body">
           <PrizeTable prizes={snap.prizes} />
         </div>
