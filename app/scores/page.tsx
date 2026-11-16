@@ -20,7 +20,6 @@ export default function ScoresPage() {
   const [selectedOffice, setSelectedOffice] = useState("");
   const [selectedValidator, setSelectedValidator] = useState("");
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
-  const [ratingKind, setRatingKind] = useState<"office" | "focal">("office");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(
     null,
@@ -126,7 +125,7 @@ export default function ScoresPage() {
       <PageHead
         kicker="Final evaluation"
         title="Validator ratings"
-        description="Choose an office and validator, then rate the office or its focal person."
+        description="Select an office and validator, then click a score from 1 to 5."
         right={
           <Link className="btn secondary" href="/finals">
             View final results <Icon name="arrow" size={14} />
@@ -137,66 +136,95 @@ export default function ScoresPage() {
         <NotConnected missingEnv={snap.missingEnv} />
       ) : (
         <>
-          <section className="section">
-            <div className="section-head">
-              <h3>Choose who you’re rating</h3>
-              <p>Drafts stay here when you switch between offices</p>
-            </div>
-            <div className="section-body">
-              <div className="field-row">
-                <div>
-                  <label htmlFor="score-track">Track</label>
-                  <select
-                    id="score-track"
+          <section
+            className="section validator-picker"
+            aria-label="Choose evaluation"
+          >
+            <div className="score-picker-row">
+              <span className="score-picker-label">Track</span>
+              <div className="score-options" role="group" aria-label="Track">
+                {(["Frontline", "Non-frontline"] as const).map((t) => (
+                  <button
+                    key={t}
                     disabled={busy}
-                    value={track}
-                    onChange={(e) => {
-                      setTrack(e.target.value as typeof track);
+                    aria-pressed={track === t}
+                    className={track === t ? "selected" : ""}
+                    onClick={() => {
+                      setTrack(t);
                       setSelectedOffice("");
                       setMessage(null);
                     }}
                   >
-                    <option>Frontline</option>
-                    <option>Non-frontline</option>
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="score-office">Top 5 office</label>
-                  <select
-                    id="score-office"
-                    disabled={busy || !top5.length}
-                    value={office?.code || ""}
-                    onChange={(e) => {
-                      setSelectedOffice(e.target.value);
-                      setMessage(null);
-                    }}
-                  >
-                    {!top5.length && (
-                      <option value="">No offices ready yet</option>
-                    )}
-                    {top5.map((o, i) => (
-                      <option key={o.code} value={o.code}>
-                        #{i + 1} · {o.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="score-validator">Validator</label>
-                  <select
-                    id="score-validator"
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="score-picker-row">
+              <span className="score-picker-label">Top 5 office</span>
+              <div
+                className="score-options office-options"
+                role="group"
+                aria-label="Top 5 office"
+              >
+                {!top5.length && <p>No offices ready yet</p>}
+                {top5.map((o, i) => (
+                  <button
+                    key={o.code}
                     disabled={busy}
-                    value={validator || ""}
-                    onChange={(e) => {
-                      setSelectedValidator(e.target.value);
+                    aria-pressed={office?.code === o.code}
+                    className={office?.code === o.code ? "selected" : ""}
+                    title={o.name}
+                    onClick={() => {
+                      setSelectedOffice(o.code);
                       setMessage(null);
                     }}
                   >
-                    {validatorNames.map((v) => (
-                      <option key={v}>{v}</option>
-                    ))}
-                  </select>
-                </div>
+                    <span className="office-option-rank">{i + 1}</span>
+                    {snap.offices.find((item) => item.code === o.code)?.short ||
+                      o.name}
+                    {Object.keys(drafts).some((key) =>
+                      key.startsWith(`${o.code}|`),
+                    ) && (
+                      <span
+                        className="draft-dot"
+                        aria-label="Unsaved ratings"
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="score-picker-row">
+              <span className="score-picker-label">Validator</span>
+              <div
+                className="score-options"
+                role="group"
+                aria-label="Validator"
+              >
+                {!validatorNames.length && (
+                  <p>Add validators in Program settings to begin.</p>
+                )}
+                {validatorNames.map((v) => (
+                  <button
+                    key={v}
+                    disabled={busy}
+                    aria-pressed={validator === v}
+                    className={validator === v ? "selected" : ""}
+                    onClick={() => {
+                      setSelectedValidator(v);
+                      setMessage(null);
+                    }}
+                  >
+                    {v}
+                    {drafts[`${office?.code}|${v}`] && (
+                      <span
+                        className="draft-dot"
+                        aria-label="Unsaved ratings"
+                      />
+                    )}
+                  </button>
+                ))}
               </div>
             </div>
           </section>
@@ -227,29 +255,7 @@ export default function ScoresPage() {
                   {filled}/9 items rated
                 </span>
               </div>
-              <div className="tabs" aria-label="Rating category">
-                <button
-                  className={ratingKind === "office" ? "selected" : ""}
-                  aria-pressed={ratingKind === "office"}
-                  onClick={() => setRatingKind("office")}
-                >
-                  Office ratings{" "}
-                  <span className="rating-tab-count">
-                    {draft.office.filter((v) => v !== null).length}/4
-                  </span>
-                </button>
-                <button
-                  className={ratingKind === "focal" ? "selected" : ""}
-                  aria-pressed={ratingKind === "focal"}
-                  onClick={() => setRatingKind("focal")}
-                >
-                  Focal-person ratings{" "}
-                  <span className="rating-tab-count">
-                    {draft.focal.filter((v) => v !== null).length}/5
-                  </span>
-                </button>
-              </div>
-              <div className="rating-panels">
+              <div className="rating-panels validator-rating-panels">
                 {[
                   {
                     kind: "office" as const,
@@ -265,73 +271,57 @@ export default function ScoresPage() {
                     items: FOCAL_ITEMS,
                     total: liveFocal,
                   },
-                ]
-                  .filter((group) => group.kind === ratingKind)
-                  .map((group) => (
-                    <section className="section" key={group.kind}>
-                      <div className="section-head">
-                        <Icon name={group.icon} size={17} />
-                        <h3>{group.title}</h3>
-                        <p>{fmtPct(group.total)} weighted score</p>
+                ].map((group) => (
+                  <section className="section" key={group.kind}>
+                    <div className="section-head">
+                      <Icon name={group.icon} size={17} />
+                      <h3>{group.title}</h3>
+                      <p>{fmtPct(group.total)} weighted score</p>
+                    </div>
+                    <div className="section-body">
+                      <div className="rating-legend">
+                        <span>1 · Lowest</span>
+                        <span>5 · Highest</span>
                       </div>
-                      <div className="section-body">
-                        <div className="rating-legend">
-                          <span>1 · Lowest</span>
-                          <span>5 · Highest</span>
-                        </div>
-                        {group.items.map((item, i) => (
-                          <fieldset className="rating-item" key={item}>
-                            <legend>{item}</legend>
-                            <div className="rating-buttons">
-                              {[1, 2, 3, 4, 5].map((n) => (
-                                <button
-                                  key={n}
-                                  disabled={busy}
-                                  aria-label={`${group.kind === "office" ? "Office" : "Focal person"} ${item}: ${n}`}
-                                  aria-pressed={draft[group.kind][i] === n}
-                                  className={
-                                    draft[group.kind][i] === n ? "selected" : ""
-                                  }
-                                  onClick={() => setScore(group.kind, i, n)}
-                                >
-                                  {n}
-                                </button>
-                              ))}
+                      {group.items.map((item, i) => (
+                        <fieldset className="rating-item" key={item}>
+                          <legend>{item}</legend>
+                          <div className="rating-buttons">
+                            {[1, 2, 3, 4, 5].map((n) => (
                               <button
-                                className="clear-score"
-                                disabled={busy || draft[group.kind][i] === null}
-                                aria-label={`Clear ${group.kind} ${item} score`}
-                                onClick={() => setScore(group.kind, i, null)}
+                                key={n}
+                                disabled={busy || !row}
+                                aria-label={`${group.kind === "office" ? "Office" : "Focal person"} ${item}: ${n}`}
+                                aria-pressed={draft[group.kind][i] === n}
+                                className={
+                                  draft[group.kind][i] === n ? "selected" : ""
+                                }
+                                onClick={() => setScore(group.kind, i, n)}
                               >
-                                <Icon name="close" size={13} />
+                                {n}
                               </button>
-                            </div>
-                          </fieldset>
-                        ))}
-                        <div className="tip">
-                          <Icon name="help" size={16} />
-                          <p>
-                            Unrated items stay blank. They count as missing,
-                            never as zero.
-                          </p>
-                        </div>
-                        <div className="rating-next">
-                          <button
-                            className="btn secondary small"
-                            onClick={() =>
-                              setRatingKind(
-                                ratingKind === "office" ? "focal" : "office",
-                              )
-                            }
-                          >
-                            {ratingKind === "office"
-                              ? "Next: Focal-person ratings →"
-                              : "← Back to office ratings"}
-                          </button>
-                        </div>
+                            ))}
+                            <button
+                              className="clear-score"
+                              disabled={busy || draft[group.kind][i] === null}
+                              aria-label={`Clear ${group.kind} ${item} score`}
+                              onClick={() => setScore(group.kind, i, null)}
+                            >
+                              <Icon name="close" size={13} />
+                            </button>
+                          </div>
+                        </fieldset>
+                      ))}
+                      <div className="tip">
+                        <Icon name="help" size={16} />
+                        <p>
+                          Unrated items stay blank. They count as missing, never
+                          as zero.
+                        </p>
                       </div>
-                    </section>
-                  ))}
+                    </div>
+                  </section>
+                ))}
               </div>
               {message && (
                 <div
@@ -345,7 +335,7 @@ export default function ScoresPage() {
                 <p>
                   {drafts[key]
                     ? "Unsaved ratings · you can save a partial evaluation and return later."
-                    : "Select a rating to begin or update this evaluation."}
+                    : "Drafts stay here when you switch offices or validators. Save each evaluation when ready."}
                 </p>
                 <button
                   className="btn"

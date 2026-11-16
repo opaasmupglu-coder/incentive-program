@@ -1253,6 +1253,107 @@ select:disabled {
   position: static;
 }
 /* Rating controls, calendar, and preferences. */
+.validator-picker {
+  padding: 8px 20px;
+}
+.score-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+}
+.score-picker-row + .score-picker-row {
+  border-top: 1px solid var(--line);
+}
+.score-picker-label {
+  flex: 0 0 90px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.score-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.score-options button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid var(--line-dark);
+  border-radius: 8px;
+  background: white;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.score-options button.selected {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.score-options button:focus-visible,
+.rating-buttons button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.office-option-rank {
+  font-size: 11px;
+  opacity: 0.7;
+}
+.draft-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #b7791f;
+}
+.validator-rating-panels.rating-panels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 20px;
+}
+.validator-rating-panels .section-body {
+  max-width: none;
+}
+.validator-rating-panels .section-head {
+  flex-wrap: wrap;
+}
+.validator-rating-panels .rating-item {
+  padding-bottom: 12px;
+  margin-bottom: 10px;
+}
+.validator-rating-panels ~ .save-bar {
+  position: static;
+  margin-top: 20px;
+}
+@media (max-width: 1100px) {
+  .validator-rating-panels.rating-panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .validator-picker {
+    padding: 4px 16px;
+  }
+  .score-picker-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .score-picker-label {
+    flex-basis: auto;
+  }
+  .score-options button {
+    padding: 8px 12px;
+  }
+}
 .rating-panels {
   display: block;
 }
