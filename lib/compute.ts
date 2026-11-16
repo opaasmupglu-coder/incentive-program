@@ -27,8 +27,6 @@ export type MonthlyInput = {
   collection: Map<number, { forms: number | null; clients: number | null }>;
   gpr: Map<number, number | null>;
   timeliness: Map<number, number | null>;
-  // Retain the submission requirements separately when resolution includes suggestions.
-  timelinessBasis?: Map<number, number | null>;
 };
 
 export function resolutionRate(
@@ -164,9 +162,7 @@ export function computeOffice(
     const c = input.collection.get(m) || { forms: null, clients: null };
     const g = input.gpr.get(m) ?? null;
     const d = input.timeliness.get(m) ?? null;
-    const submissionCount = input.timelinessBasis?.has(m)
-      ? (input.timelinessBasis.get(m) ?? null)
-      : r.plans;
+    const submissionCount = r.plans;
     resFirst.push(r.acted);
     resSecond.push(r.plans);
     collFirst.push(c.forms);

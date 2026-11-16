@@ -11,7 +11,6 @@ export async function ensureCalendar() {
         [
           "CREATE TABLE IF NOT EXISTS working_days (date TEXT PRIMARY KEY, working INTEGER NOT NULL, note TEXT)",
           "CREATE TABLE IF NOT EXISTS timeliness_dates (office_code TEXT, month INTEGER, released TEXT, received TEXT, PRIMARY KEY(office_code, month))",
-          "CREATE TABLE IF NOT EXISTS monthly_timeliness_basis (office_code TEXT, month INTEGER, feedback_count INTEGER, PRIMARY KEY(office_code, month))",
           "CREATE TABLE IF NOT EXISTS submission_date_archive (id INTEGER PRIMARY KEY AUTOINCREMENT, office_code TEXT, month INTEGER, released TEXT, received TEXT, days INTEGER, archived_at TEXT, reason TEXT)",
         ],
         "write",
@@ -51,7 +50,7 @@ export { source as calendarSource };
 export function zeroNegativeSubmissionCleanup(code: string, month: number) {
   return [
     {
-      sql: "INSERT INTO submission_date_archive (office_code,month,released,received,days,archived_at,reason) SELECT d.office_code,d.month,d.released,d.received,t.days,datetime('now'),'Zero negative comments: no submission required' FROM timeliness_dates d LEFT JOIN monthly_timeliness t ON t.office_code=d.office_code AND t.month=d.month WHERE d.office_code=? AND d.month=?",
+      sql: "INSERT INTO submission_date_archive (office_code,month,released,received,days,archived_at,reason) SELECT d.office_code,d.month,d.released,d.received,t.days,datetime('now'),'Zero negative comments and suggestions: no submission required' FROM timeliness_dates d LEFT JOIN monthly_timeliness t ON t.office_code=d.office_code AND t.month=d.month WHERE d.office_code=? AND d.month=?",
       args: [code, month],
     },
     {

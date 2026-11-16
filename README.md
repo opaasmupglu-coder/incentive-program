@@ -21,9 +21,10 @@ The four categories are visible tabs, with arrow-key navigation and protection
 for unsaved changes. **Action plans resolved** shows **Total Negative Comments + Suggestions**
 first and **Total Acted Upon** second. The denominator combines both categories.
 Confirmed zero-total months automatically score 100% and need no acted-upon entry.
-Timeliness retains its original negative-only submission requirements, stored
-separately in `monthly_timeliness_basis`. Adding suggestions to resolution does
-not change timeliness dates, day counts, exemptions, or scores. Exempt dates are
+Timeliness also uses the combined negative-comment and suggestion count. Months
+with any items require submission dates or a manual working-day count. Only
+confirmed zero-total months are exempt and automatically score 100%. Existing
+dates and day counts remain stored. Exempt dates are
 archived in `submission_date_archive` before being removed from active data.
 Months with negative comments or suggestions need an acted-upon count; unresolved missing counts
 keep the office's official initial total incomplete, while preview totals remain
@@ -138,8 +139,8 @@ Do not create a second Vercel project for this app.
 - Resolution rate = total acted upon / (negative comments + suggestions). Confirmed zero
   combined counts score 100%; a missing total or a positive total
   with no acted-upon count remains pending. Acted-upon counts cannot exceed the
-  combined negative comments and suggestions. Timeliness keeps the pre-existing
-  negative-only submission requirements independently of this denominator.
+  combined negative comments and suggestions. Timeliness uses the same combined
+  count to determine which months require a submission.
 - Collection rate = min(1, forms / (clients × 384.16 / ((clients−1) + 384.16))),
   0 if forms < the track minimum (20 Frontline / 10 Non-frontline), blank if
   forms are missing. The minimum-forms check precedes denominator

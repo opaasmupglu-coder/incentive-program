@@ -12,7 +12,7 @@ async function main() {
   try {
     const dates = (
       await tx.execute(
-        "SELECT d.*,t.days,(CASE WHEN b.office_code IS NOT NULL THEN b.feedback_count ELSE r.plans END) AS plans FROM timeliness_dates d LEFT JOIN monthly_timeliness t ON t.office_code=d.office_code AND t.month=d.month LEFT JOIN monthly_resolution r ON r.office_code=d.office_code AND r.month=d.month LEFT JOIN monthly_timeliness_basis b ON b.office_code=d.office_code AND b.month=d.month",
+        "SELECT d.*,t.days,r.plans FROM timeliness_dates d LEFT JOIN monthly_timeliness t ON t.office_code=d.office_code AND t.month=d.month LEFT JOIN monthly_resolution r ON r.office_code=d.office_code AND r.month=d.month",
       )
     ).rows;
     const plan = dates

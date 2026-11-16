@@ -66,28 +66,20 @@ input.timeliness.set(2, 2);
 const completed = computeOffice(office, input, seed.settings);
 assert.equal(completed.initial.resolution, 0.75);
 assert.notEqual(completed.initial.total, null);
-// Suggestions expand resolution without changing submission requirements.
-input.timelinessBasis = new Map([
-  [1, 0],
-  [2, 2],
-]);
-const previousTimeliness = computeOffice(office, input, seed.settings).monthly
-  .timeliness;
+// Suggestion-only months require submission data just like negative comments.
 input.resolution.set(1, { acted: null, plans: 5 });
+input.timeliness.delete(1);
 const withSuggestions = computeOffice(office, input, seed.settings);
 assert.equal(withSuggestions.monthly.resolution.computed[0], null);
-assert.deepEqual(withSuggestions.monthly.timeliness, previousTimeliness);
-assert.equal(withSuggestions.monthly.timeliness.second[0], 0);
-assert.equal(withSuggestions.monthly.timeliness.computed[0], 1);
-input.resolution.set(2, { acted: 1, plans: 0 });
-assert.equal(
-  computeOffice(office, input, seed.settings).monthly.timeliness.computed[1],
-  1,
-);
-assert.equal(
-  computeOffice(office, input, seed.settings).monthly.timeliness.first[1],
-  2,
-);
+assert.equal(withSuggestions.monthly.timeliness.second[0], 5);
+assert.equal(withSuggestions.monthly.timeliness.computed[0], null);
+assert.match(withSuggestions.initial.status, /Timeliness/);
+input.timeliness.set(1, 4);
+const submitted = computeOffice(office, input, seed.settings);
+assert.equal(submitted.monthly.timeliness.first[0], 4);
+assert.equal(submitted.monthly.timeliness.computed[0], 0.8);
+assert.equal(submitted.monthly.timeliness.first[1], 2);
+assert.equal(submitted.monthly.timeliness.computed[1], 1);
 console.log(
-  "Resolution: zero combined counts auto-score 100%; positive counts need acted-upon input; suggestions do not change independent timeliness scores or requirements.",
+  "Resolution and timeliness: zero combined counts are exempt; suggestion-only months require acted-upon and submission inputs; existing timeliness counts and scores are preserved.",
 );

@@ -449,7 +449,7 @@ export default function EnterPage() {
               {(criterion === "collection" || criterion === "gpr") &&
                 ` Fewer than ${minForms} forms in a month scores 0% for both collection and GPR. The original GAR is kept for reference.`}
               {criterion === "timeliness"
-                ? " Submission requirements remain based on negative comments only."
+                ? " Submission dates are required for months with negative comments or suggestions."
                 : ""}
             </p>
             {criterion === "timeliness" && calendarError && (
@@ -679,7 +679,7 @@ export default function EnterPage() {
                 {criterion === "resolution"
                   ? "0 negative comments + suggestions = 100%"
                   : criterion === "timeliness"
-                    ? "0 negative comments = no submission required"
+                    ? "0 negative comments + suggestions = no submission required"
                     : "Blank values mean no data"}
               </span>
             </div>

@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
         ? new Set(
             (
               await getTurso()?.execute({
-                sql: "SELECT r.month FROM monthly_resolution r LEFT JOIN monthly_timeliness_basis b ON b.office_code=r.office_code AND b.month=r.month WHERE r.office_code=? AND (CASE WHEN b.office_code IS NOT NULL THEN b.feedback_count ELSE r.plans END)=0",
+                sql: "SELECT month FROM monthly_resolution WHERE office_code=? AND plans=0",
                 args: [code],
               })
             )?.rows.map((r) => Number(r.month)) || [],
