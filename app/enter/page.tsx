@@ -46,7 +46,7 @@ const criteria = [
     label: "Submission dates",
     first: "Working days",
     second: null,
-    hint: "Enter this office’s release and received dates. Working days and the timeliness score are calculated automatically.",
+    hint: "Enter this office’s release and received dates. Counting starts the day after release and includes the received date, using the working-day calendar.",
   },
 ];
 const blankDates = () =>

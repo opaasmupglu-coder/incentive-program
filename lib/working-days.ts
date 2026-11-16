@@ -13,5 +13,6 @@ export function countWorkingDays(
         86400000,
     ) + 1;
   if (!Number.isFinite(expected) || range.length !== expected) return null;
-  return range.filter((d) => d.working).length;
+  // Validate full calendar coverage, but start counting after release day.
+  return range.filter((d) => d.date > released && d.working).length;
 }

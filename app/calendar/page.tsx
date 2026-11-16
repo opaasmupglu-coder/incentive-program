@@ -120,7 +120,8 @@ export default function CalendarPage() {
               <div className="section-body">
                 <p className="muted" style={{ fontSize: 12 }}>
                   Choose the release and received dates. We’ll count only
-                  working days, including both dates.
+                  working days, excluding the release date and including the
+                  received date.
                 </p>
                 <label htmlFor="released">Date released</label>
                 <input
@@ -148,7 +149,7 @@ export default function CalendarPage() {
                     working days{" "}
                     {count === null
                       ? "· select a valid date range"
-                      : "· both dates included"}
+                      : "· release day excluded"}
                   </p>
                 </div>
                 {released && received && received < released && (
