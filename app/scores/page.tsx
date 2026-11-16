@@ -1,7 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { FOCAL_ITEMS, OFFICE_ITEMS } from "@/lib/types";
 import { fmtNum, freshnessText, useSnapshot } from "@/components/useSnapshot";
+import { ErrorState, LoadingState, NotConnected, PageHead, SectionHead } from "@/components/ui";
 
 function ScoreSelect({
   label,
@@ -37,20 +38,29 @@ export default function ScoresPage() {
   const [busyRow, setBusyRow] = useState<number | null>(null);
   const [msg, setMsg] = useState<{ row: number; text: string; ok: boolean } | null>(null);
 
-  if (loading) return <p>Loading…</p>;
-  if (error) return <div className="notice error">{error}</div>;
-  if (!snap) return <p>No data yet.</p>;
+  const avgRows = useMemo(
+    () => (snap ? (track === "Frontline" ? snap.validatorAvg.slice(0, 5) : snap.validatorAvg.slice(5, 10)) : []),
+    [snap, track]
+  );
+  const top5 = useMemo(() => avgRows.filter((r) => r.code), [avgRows]);
+
+  if (loading) return <LoadingState />;
+  if (error) return <ErrorState error={error} />;
+  if (!snap) return <LoadingState what="No data yet" />;
   if (!snap.connected) {
     return (
-      <div className="notice">
-        <b>Not connected to the database yet.</b> Add <code>TURSO_DATABASE_URL</code> and{" "}
-        <code>TURSO_AUTH_TOKEN</code> in Vercel and redeploy.
-      </div>
+      <>
+        <PageHead
+          kicker="Section 04"
+          title="Validator scores"
+          description="Score the top 5 offices, 1–5 per item. Blank items stay blank — they don't count as zero."
+          right={<span className="freshness">{freshnessText(lastSynced)}</span>}
+        />
+        <NotConnected missingEnv={snap.missingEnv} />
+      </>
     );
   }
 
-  const avgRows = track === "Frontline" ? snap.validatorAvg.slice(0, 5) : snap.validatorAvg.slice(5, 10);
-  const top5 = avgRows.filter((r) => r.code);
   const validatorNames = (snap.settings?.validatorNames || []).filter(Boolean);
 
   function draftFor(sheetRow: number, v: { officeScores: (number | null)[]; focalScores: (number | null)[] }) {
@@ -112,117 +122,126 @@ export default function ScoresPage() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h2>Validator scores</h2>
-          <p>Score the top 5 offices, 1–5 per item. Blank items stay blank — they don&apos;t count as zero.</p>
-        </div>
-        <span className="freshness">{freshnessText(lastSynced)}</span>
-      </div>
+      <PageHead
+        kicker="Section 04"
+        title="Validator scores"
+        description="Score the top 5 offices, 1–5 per item. Blank items stay blank — they don't count as zero."
+        right={<span className="freshness">{freshnessText(lastSynced)}</span>}
+      />
 
-      <div className="card">
-        <label htmlFor="track">Track</label>
-        <select id="track" value={track} onChange={(e) => setTrack(e.target.value as typeof track)} style={{ maxWidth: 260 }}>
-          <option value="Frontline">Frontline</option>
-          <option value="Non-frontline">Non-frontline</option>
-        </select>
-      </div>
+      <section className="section" aria-labelledby="pick-track">
+        <SectionHead num="01" title="Pick a track" />
+        <div className="section-body">
+          <label htmlFor="track">Track</label>
+          <select id="track" value={track} onChange={(e) => setTrack(e.target.value as typeof track)} style={{ maxWidth: 260 }}>
+            <option value="Frontline">Frontline</option>
+            <option value="Non-frontline">Non-frontline</option>
+          </select>
+        </div>
+      </section>
 
       {top5.length === 0 && (
-        <div className="notice">
+        <div className="notice" role="status">
+          <span className="notice-kicker">Top 5 not ready</span>
           The top 5 {track === "Frontline" ? "Frontline" : "Non-frontline"} offices aren&apos;t determined yet — enter
           monthly numbers first so the Initial totals can rank the offices.
         </div>
       )}
 
-      {top5.map((avg) => {
+      {top5.map((avg, idx) => {
         const rank = avgRows.indexOf(avg) + 1;
         const rows = snap.validators.filter(
           (v) => v.code === avg.code && (track === "Frontline" ? v.sheetRow <= 18 : v.sheetRow >= 19)
         );
         return (
-          <div className="card" key={avg.code}>
-            <h3>
-              #{rank} — {avg.name}
-            </h3>
-            <p>
-              Office average: <b>{avg.officeAvg !== null ? fmtNum(avg.officeAvg) : "—"}</b> ({avg.officeRatedCount ?? 0}
-              /3 validators rated) · Focal average: <b>{avg.focalAvg !== null ? fmtNum(avg.focalAvg) : "—"}</b> (
-              {avg.focalRatedCount ?? 0}/3 rated)
-            </p>
-            {rows.map((v) => {
-              const d = draftFor(v.sheetRow, v);
-              return (
-                <div key={v.sheetRow} style={{ borderTop: "1px solid var(--line)", paddingTop: 12, marginTop: 12 }}>
-                  <b>{v.validator || "Validator"}</b>{" "}
-                  <span className="pill muted">
-                    Office total: {v.officeTotal !== null ? fmtNum(v.officeTotal) : "—"} · Focal total:{" "}
-                    {v.focalTotal !== null ? fmtNum(v.focalTotal) : "—"}
-                  </span>
-                  <div className="score-grid">
-                    {OFFICE_ITEMS.map((label, i) => (
-                      <ScoreSelect
-                        key={label}
-                        label={`Office — ${label}`}
-                        value={d.office[i]}
-                        onChange={(val) => setDraft(v.sheetRow, "office", i, val)}
-                      />
-                    ))}
-                    {FOCAL_ITEMS.map((label, i) => (
-                      <ScoreSelect
-                        key={label}
-                        label={`Focal — ${label}`}
-                        value={d.focal[i]}
-                        onChange={(val) => setDraft(v.sheetRow, "focal", i, val)}
-                      />
-                    ))}
+          <section className="section" key={avg.code} aria-labelledby={`office-${avg.code}`}>
+            <SectionHead
+              num={String(idx + 2).padStart(2, "0")}
+              title={`#${rank} — ${avg.name}`}
+              note={`Office average ${avg.officeAvg !== null ? fmtNum(avg.officeAvg) : "—"} (${avg.officeRatedCount ?? 0}/3 rated) · Focal average ${avg.focalAvg !== null ? fmtNum(avg.focalAvg) : "—"} (${avg.focalRatedCount ?? 0}/3 rated)`}
+            />
+            <div className="section-body">
+              {rows.map((v) => {
+                const d = draftFor(v.sheetRow, v);
+                return (
+                  <div className="score-block" key={v.sheetRow}>
+                    <b>{v.validator || "Validator"}</b>{" "}
+                    <span className="sub">
+                      Office total: {v.officeTotal !== null ? fmtNum(v.officeTotal) : "—"} · Focal total:{" "}
+                      {v.focalTotal !== null ? fmtNum(v.focalTotal) : "—"}
+                    </span>
+                    <div className="score-grid">
+                      {OFFICE_ITEMS.map((label, i) => (
+                        <ScoreSelect
+                          key={label}
+                          label={`Office — ${label}`}
+                          value={d.office[i]}
+                          onChange={(val) => setDraft(v.sheetRow, "office", i, val)}
+                        />
+                      ))}
+                      {FOCAL_ITEMS.map((label, i) => (
+                        <ScoreSelect
+                          key={label}
+                          label={`Focal — ${label}`}
+                          value={d.focal[i]}
+                          onChange={(val) => setDraft(v.sheetRow, "focal", i, val)}
+                        />
+                      ))}
+                    </div>
+                    {msg && msg.row === v.sheetRow && (
+                      <div className={`notice ${msg.ok ? "ok" : "error"}`} role={msg.ok ? "status" : "alert"}>
+                        <span className="notice-kicker">{msg.ok ? "Saved" : "Error"}</span>
+                        {msg.text}
+                      </div>
+                    )}
+                    <button className="btn small" disabled={busyRow === v.sheetRow} onClick={() => saveRow(v)}>
+                      {busyRow === v.sheetRow ? "Saving…" : `Save ${v.validator || "validator"} scores`}
+                    </button>
                   </div>
-                  {msg && msg.row === v.sheetRow && (
-                    <div className={`notice ${msg.ok ? "ok" : "error"}`}>{msg.text}</div>
-                  )}
-                  <button className="btn small" disabled={busyRow === v.sheetRow} onClick={() => saveRow(v)}>
-                    {busyRow === v.sheetRow ? "Saving…" : `Save ${v.validator || "validator"} scores`}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          </section>
         );
       })}
 
       {snap.prevScores.length > 0 && (
-        <div className="card">
-          <h3>Previous round&apos;s scores (reference only)</h3>
-          <p>These came from the old file and are not used by any formula.</p>
-          <table>
-            <thead>
-              <tr>
-                <th>Validator</th>
-                <th>Office</th>
-                <th className="num">CAR</th>
-                <th className="num">Onsite</th>
-                <th className="num">Best</th>
-                <th className="num">Interview</th>
-              </tr>
-            </thead>
-            <tbody>
-              {snap.prevScores
-                .filter((p) => validatorNames.length === 0 || validatorNames.includes(p.validator))
-                .slice(0, 36)
-                .map((p, i) => (
-                  <tr key={`${p.validator}-${p.code}-${i}`}>
-                    <td>{p.validator}</td>
-                    <td>{p.office}</td>
-                    {p.scores.slice(0, 4).map((s, j) => (
-                      <td key={j} className="num">
-                        {s ?? "—"}
-                      </td>
-                    ))}
+        <section className="section" aria-labelledby="prev-scores">
+          <SectionHead num="07" title="Previous round's scores (reference only)" />
+          <div className="section-body">
+            <p className="muted">These came from the old file and are not used by any formula.</p>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Validator</th>
+                    <th>Office</th>
+                    <th className="num">CAR</th>
+                    <th className="num">Onsite</th>
+                    <th className="num">Best</th>
+                    <th className="num">Interview</th>
                   </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {snap.prevScores
+                    .filter((p) => validatorNames.length === 0 || validatorNames.includes(p.validator))
+                    .slice(0, 36)
+                    .map((p, i) => (
+                      <tr key={`${p.validator}-${p.code}-${i}`}>
+                        <td>{p.validator}</td>
+                        <td>{p.office}</td>
+                        {p.scores.slice(0, 4).map((s, j) => (
+                          <td key={j} className="num">
+                            {s ?? "—"}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
       )}
     </>
   );

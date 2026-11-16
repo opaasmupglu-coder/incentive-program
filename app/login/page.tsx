@@ -25,10 +25,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="card" style={{ maxWidth: 420, margin: "40px auto" }}>
-      <h3>Sign in</h3>
-      <p>This app is protected. Enter the app password to continue.</p>
-      <form onSubmit={submit}>
+    <div style={{ maxWidth: 440, margin: "48px auto" }}>
+      <p className="kicker">Incentive Program · 2026</p>
+      <h2 style={{ marginTop: 6 }}>Sign in</h2>
+      <p className="lede">This app is protected. Enter the app password to continue.</p>
+      <form onSubmit={submit} style={{ marginTop: 24, borderTop: "1px solid var(--line-dark)", paddingTop: 20 }}>
         <label htmlFor="password">Password</label>
         <input
           id="password"
@@ -37,7 +38,12 @@ export default function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password"
         />
-        {error && <div className="notice error">{error}</div>}
+        {error && (
+          <div className="notice error" role="alert">
+            <span className="notice-kicker">Error</span>
+            {error}
+          </div>
+        )}
         <button className="btn" type="submit" disabled={busy || !password}>
           {busy ? "Signing in…" : "Sign in"}
         </button>

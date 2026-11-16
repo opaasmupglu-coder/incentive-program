@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { freshnessText, useSnapshot } from "@/components/useSnapshot";
+import { ErrorState, LoadingState, NotConnected, PageHead, SectionHead } from "@/components/ui";
 
 type Field = { key: string; label: string; kind: "text" | "pct" | "num"; step?: string };
 
@@ -48,6 +49,14 @@ const ITEM_FIELDS: Field[] = [
 ];
 
 const ALL_FIELDS = [...NAME_FIELDS, ...WEIGHT_FIELDS, ...MIX_FIELDS, ...RULE_FIELDS, ...TIME_FIELDS, ...ITEM_FIELDS];
+const GROUPS: { num: string; title: string; fields: Field[] }[] = [
+  { num: "01", title: "Validators — who rates the top 5", fields: NAME_FIELDS },
+  { num: "02", title: "Initial evaluation weights", fields: WEIGHT_FIELDS },
+  { num: "03", title: "Final mix", fields: MIX_FIELDS },
+  { num: "04", title: "Rules", fields: RULE_FIELDS },
+  { num: "05", title: "Timeliness — days to submit → score", fields: TIME_FIELDS },
+  { num: "06", title: "Validator item weights", fields: ITEM_FIELDS },
+];
 
 export default function SettingsPage() {
   const { snap, loading, error, lastSynced, refresh, setSaving } = useSnapshot();
@@ -98,15 +107,20 @@ export default function SettingsPage() {
     setLoaded(true);
   }, [snap, loaded]);
 
-  if (loading) return <p>Loading…</p>;
-  if (error) return <div className="notice error">{error}</div>;
-  if (!snap) return <p>No data yet.</p>;
+  if (loading) return <LoadingState />;
+  if (error) return <ErrorState error={error} />;
+  if (!snap) return <LoadingState what="No data yet" />;
   if (!snap.connected || !snap.settings) {
     return (
-      <div className="notice">
-        <b>Not connected to the database yet.</b> Add <code>TURSO_DATABASE_URL</code> and{" "}
-        <code>TURSO_AUTH_TOKEN</code> in Vercel and redeploy.
-      </div>
+      <>
+        <PageHead
+          kicker="Section 06"
+          title="Settings"
+          description="Change a value once and every formula follows. Weights are percentages; each track must total 100%."
+          right={<span className="freshness">{freshnessText(lastSynced)}</span>}
+        />
+        <NotConnected missingEnv={snap.missingEnv} />
+      </>
     );
   }
 
@@ -147,76 +161,83 @@ export default function SettingsPage() {
     }
   }
 
-  function FieldGroup({ title, fields }: { title: string; fields: Field[] }) {
-    return (
-      <div className="card">
-        <h3>{title}</h3>
-        <div className="field-row">
-          {fields.map((f) => (
-            <div key={f.key}>
-              <label htmlFor={f.key}>{f.label}</label>
-              <input
-                id={f.key}
-                type={f.kind === "text" ? "text" : "number"}
-                step={f.step || "any"}
-                value={values[f.key] ?? ""}
-                onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h2>Settings</h2>
-          <p>Change a value once and every formula on the sheet follows. Weights are percentages; each track must total 100%.</p>
+      <PageHead
+        kicker="Section 06"
+        title="Settings"
+        description="Change a value once and every formula follows. Weights are percentages; each track must total 100%."
+        right={<span className="freshness">{freshnessText(lastSynced)}</span>}
+      />
+
+      {GROUPS.map((g) => (
+        <section className="section" key={g.num} aria-labelledby={`settings-${g.num}`}>
+          <SectionHead num={g.num} title={g.title} />
+          <div className="section-body">
+            <div className="field-row">
+              {g.fields.map((f) => (
+                <div key={f.key}>
+                  <label htmlFor={f.key}>{f.label}</label>
+                  <input
+                    id={f.key}
+                    type={f.kind === "text" ? "text" : "number"}
+                    step={f.step || "any"}
+                    value={values[f.key] ?? ""}
+                    onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      ))}
+
+      {msg && (
+        <div className={`notice ${msg.ok ? "ok" : "error"}`} role={msg.ok ? "status" : "alert"}>
+          <span className="notice-kicker">{msg.ok ? "Saved" : "Error"}</span>
+          {msg.text}
         </div>
-        <span className="freshness">{freshnessText(lastSynced)}</span>
-      </div>
-
-      <FieldGroup title="Validators — who rates the top 5" fields={NAME_FIELDS} />
-      <FieldGroup title="Initial evaluation weights" fields={WEIGHT_FIELDS} />
-      <FieldGroup title="Final mix" fields={MIX_FIELDS} />
-      <FieldGroup title="Rules" fields={RULE_FIELDS} />
-      <FieldGroup title="Timeliness — days to submit → score" fields={TIME_FIELDS} />
-      <FieldGroup title="Validator item weights" fields={ITEM_FIELDS} />
-
-      {msg && <div className={`notice ${msg.ok ? "ok" : "error"}`}>{msg.text}</div>}
+      )}
       <button className="btn" onClick={save} disabled={busy}>
         {busy ? "Saving…" : "Save settings to sheet"}
       </button>
 
-      <div className="card">
-        <h3>Offices</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Office</th>
-              <th>Track</th>
-              <th>Focal person</th>
-            </tr>
-          </thead>
-          <tbody>
-            {snap.offices.map((o) => (
-              <tr key={o.code}>
-                <td>{o.code}</td>
-                <td>{o.name}</td>
-                <td>{o.track}</td>
-                <td>
-                  {o.focal || "—"}
-                  {o.focalPosition ? ` — ${o.focalPosition}` : ""}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <section className="section" aria-labelledby="offices">
+        <SectionHead num="07" title="Offices" note={`${snap.offices.length} offices`} />
+        <div className="section-body">
+          {snap.offices.length === 0 ? (
+            <p className="muted">No offices in the database yet.</p>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Office</th>
+                    <th>Track</th>
+                    <th>Focal person</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {snap.offices.map((o) => (
+                    <tr key={o.code}>
+                      <td>{o.code}</td>
+                      <td>
+                        <b>{o.name}</b>
+                      </td>
+                      <td>{o.track}</td>
+                      <td>
+                        {o.focal || "—"}
+                        {o.focalPosition ? ` — ${o.focalPosition}` : ""}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
     </>
   );
 }

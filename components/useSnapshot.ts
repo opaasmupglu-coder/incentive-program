@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Snapshot } from "@/lib/types";
 
 export function useSnapshot() {
@@ -8,13 +8,21 @@ export function useSnapshot() {
   const [error, setError] = useState<string | null>(null);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [saving, setSaving] = useState(false);
+  // Last snapshot payload, stringified. Polls that return identical data
+  // keep the previous object reference, so memoized lists and tables below
+  // do not re-render every 30 seconds for nothing.
+  const prevJson = useRef<string | null>(null);
 
   const fetchNow = useCallback(async () => {
     try {
       const res = await fetch("/api/snapshot", { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not load the sheet.");
-      setSnap(data as Snapshot);
+      const json = JSON.stringify(data);
+      if (json !== prevJson.current) {
+        prevJson.current = json;
+        setSnap(data as Snapshot);
+      }
       setLastSynced(new Date());
       setError(null);
     } catch (e) {
