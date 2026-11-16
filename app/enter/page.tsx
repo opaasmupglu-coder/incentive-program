@@ -11,7 +11,6 @@ import {
   LoadingState,
   NotConnected,
   PageHead,
-  SectionHead,
 } from "@/components/ui";
 import Icon from "@/components/Icon";
 type Criterion = "resolution" | "collection" | "gpr" | "timeliness";
@@ -19,9 +18,9 @@ const criteria = [
   {
     key: "resolution" as const,
     label: "Action plans resolved",
-    first: "Acted upon",
-    second: "With action plans",
-    hint: "How many feedback items were acted upon, out of those with action plans?",
+    first: "Total Acted Upon",
+    second: "Total Negative Comments",
+    hint: "Resolution rate = Total Acted Upon ÷ Total Negative Comments. Suggestions are excluded.",
   },
   {
     key: "collection" as const,
@@ -52,7 +51,8 @@ export default function EnterPage() {
   const [track, setTrack] = useState("Frontline");
   const [officeCode, setOfficeCode] = useState("");
   const [criterion, setCriterion] = useState<Criterion>("resolution");
-  const [month, setMonth] = useState(0);
+  const [editAll, setEditAll] = useState(false);
+  const [editedMonth, setEditedMonth] = useState<number | null>(null);
   const [manualDays, setManualDays] = useState(false);
   const [first, setFirst] = useState<string[]>(Array(10).fill(""));
   const [second, setSecond] = useState<string[]>(Array(10).fill(""));
@@ -154,11 +154,25 @@ export default function EnterPage() {
   if (error) return <ErrorState error={error} />;
   if (!snap) return <LoadingState />;
   const crit = criteria.find((c) => c.key === criterion)!;
+  // Preserve the API's numerator/denominator order while showing negatives first.
+  const inputFields = [
+    { key: "first", label: crit.first, values: first, setValues: setFirst },
+    ...(crit.second
+      ? [
+          {
+            key: "second",
+            label: crit.second,
+            values: second,
+            setValues: setSecond,
+          },
+        ]
+      : []),
+  ];
+  if (criterion === "resolution") inputFields.reverse();
   const office = snap.offices.find((o) => o.code === officeCode);
-  const completeMonths = first.filter(
-    (v, i) => v !== "" && (!crit.second || second[i] !== ""),
-  ).length;
   const num = (v: string) => (v.trim() === "" ? null : Number(v));
+  const noSubmissionRequired = (i: number) =>
+    snap.inputResolution.find((r) => r.code === officeCode)?.second[i] === 0;
   const liveScore = (i: number) => {
     const a = num(first[i]),
       b = num(second[i]);
@@ -175,6 +189,7 @@ export default function EnterPage() {
         ),
       );
     if (criterion === "gpr") return a === null ? "—" : `${a}/100`;
+    if (noSubmissionRequired(i)) return "1.00";
     return (
       timelinessScore(
         a,
@@ -217,7 +232,7 @@ export default function EnterPage() {
       )
     ) {
       setMessage({
-        text: "Acted-upon items cannot exceed items with action plans.",
+        text: "Total Acted Upon cannot exceed Total Negative Comments.",
         ok: false,
       });
       return;
@@ -225,7 +240,8 @@ export default function EnterPage() {
     if (
       criterion === "timeliness" &&
       dates.some(
-        (d) =>
+        (d, i) =>
+          !noSubmissionRequired(i) &&
           (d.released || d.received) &&
           countWorkingDays(days, d.released, d.received) === null,
       )
@@ -255,6 +271,8 @@ export default function EnterPage() {
       if (!res.ok) throw new Error(data.error || "Could not save.");
       await refresh();
       setDirty(false);
+      setEditAll(false);
+      setEditedMonth(null);
       setMessage({
         text: "Monthly scores saved. Your progress and rankings are up to date.",
         ok: true,
@@ -277,346 +295,378 @@ export default function EnterPage() {
       <PageHead
         kicker="Monthly evaluation"
         title="Enter monthly scores"
-        description="Select an office and reporting month, then choose what to update."
+        description="Choose an office and category. Review all months, edit one row, or edit all at once."
       />
       {!snap.connected ? (
         <NotConnected missingEnv={snap.missingEnv} />
       ) : (
         <>
-          <section
-            className="section entry-selection"
-            aria-label="Office and reporting month"
-          >
-            <div className="section-body">
-              <div className="field-row">
-                <div style={{ flexGrow: 2 }}>
-                  <label htmlFor="office">Office</label>
-                  <select
-                    id="office"
-                    disabled={busy}
-                    value={officeCode}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      navigate(() => {
-                        setOfficeCode(value);
-                        setTrack(
-                          snap.offices.find((o) => o.code === value)?.track ||
-                            "Frontline",
-                        );
-                        setManualDays(false);
-                        setDirty(false);
-                      });
-                    }}
-                  >
-                    {["Frontline", "Non-frontline"].map((group) => (
-                      <optgroup key={group} label={group}>
-                        {snap.offices
-                          .filter((o) => o.track === group)
-                          .map((o) => (
-                            <option key={o.code} value={o.code}>
-                              {o.name}
-                            </option>
-                          ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </div>
-                <div className="month-selector">
-                  <label htmlFor="reporting-month">Reporting month</label>
-                  <select
-                    id="reporting-month"
-                    disabled={busy}
-                    value={month}
-                    onChange={(e) => {
-                      setMonth(Number(e.target.value));
+          <section className="section entry-selection">
+            <div className="section-body compact-office-picker">
+              <div>
+                <label htmlFor="office">Office</label>
+                <select
+                  id="office"
+                  disabled={busy}
+                  value={officeCode}
+                  onChange={(e) => {
+                    const code = e.target.value;
+                    navigate(() => {
+                      setOfficeCode(code);
+                      setTrack(
+                        snap.offices.find((o) => o.code === code)?.track ||
+                          "Frontline",
+                      );
                       setManualDays(false);
-                    }}
-                  >
-                    {MONTHS.map((m, i) => (
-                      <option key={m} value={i}>
-                        {m} 2026
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                      setEditAll(false);
+                      setEditedMonth(null);
+                      setDirty(false);
+                    });
+                  }}
+                >
+                  {["Frontline", "Non-frontline"].map((group) => (
+                    <optgroup key={group} label={group}>
+                      {snap.offices
+                        .filter((o) => o.track === group)
+                        .map((o) => (
+                          <option key={o.code} value={o.code}>
+                            {o.name}
+                          </option>
+                        ))}
+                    </optgroup>
+                  ))}
+                </select>
               </div>
               <p className="entry-focal">
-                <Icon name="people" size={14} /> Focal person:{" "}
-                <b>{office?.focal || "Not assigned"}</b>
-                {office?.focalPosition ? ` · ${office.focalPosition}` : ""}{" "}
-                <Link href="/offices" style={{ marginLeft: 8 }}>
-                  Edit focal person
-                </Link>
+                <Icon name="people" size={15} />{" "}
+                <span>
+                  Focal person: <b>{office?.focal || "Not assigned"}</b>
+                  {office?.focalPosition ? ` · ${office.focalPosition}` : ""}
+                </span>
+                <Link href="/offices">Edit</Link>
               </p>
             </div>
           </section>
           <div className="entry-category">
-            <label htmlFor="entry-category">What are you updating?</label>
-            <select
-              id="entry-category"
-              value={criterion}
-              disabled={busy}
-              onChange={(e) => {
-                const value = e.target.value as Criterion;
-                navigate(() => {
-                  setCriterion(value);
-                  setManualDays(false);
-                  setDirty(false);
-                });
-              }}
-            >
-              {criteria.map((c) => (
-                <option key={c.key} value={c.key}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-            <span className="entry-category-note">
-              One category at a time. Save before switching categories.
+            <span className="entry-category-label" id="entry-category-label">
+              What are you updating?
             </span>
+            <div
+              className="entry-tabs"
+              role="tablist"
+              aria-labelledby="entry-category-label"
+            >
+              {criteria.map((c, index) => {
+                const choose = (next: Criterion) =>
+                  navigate(() => {
+                    setCriterion(next);
+                    setManualDays(false);
+                    setEditAll(false);
+                    setEditedMonth(null);
+                    setDirty(false);
+                    document.getElementById(`criterion-${next}`)?.focus();
+                  });
+                return (
+                  <button
+                    key={c.key}
+                    id={`criterion-${c.key}`}
+                    type="button"
+                    role="tab"
+                    disabled={busy}
+                    aria-selected={criterion === c.key}
+                    aria-controls="entry-panel"
+                    tabIndex={criterion === c.key ? 0 : -1}
+                    className={criterion === c.key ? "selected" : ""}
+                    onClick={() => choose(c.key)}
+                    onKeyDown={(e) => {
+                      const next =
+                        e.key === "ArrowRight"
+                          ? (index + 1) % criteria.length
+                          : e.key === "ArrowLeft"
+                            ? (index + criteria.length - 1) % criteria.length
+                            : e.key === "Home"
+                              ? 0
+                              : e.key === "End"
+                                ? criteria.length - 1
+                                : null;
+                      if (next !== null) {
+                        e.preventDefault();
+                        choose(criteria[next].key);
+                      }
+                    }}
+                  >
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <section className="section focused-entry">
-            <SectionHead
-              num="02"
-              title={`${crit.label}`}
-              note={`${MONTHS[month]} 2026`}
-            />
-            <div className="section-body">
-              <div className="entry-office-context">
-                <Icon name="building" size={17} />
-                <span>
-                  <strong>{office?.name || "Select an office"}</strong>
-                  <small>
-                    These entries apply only to this office and reporting month.
-                  </small>
-                </span>
+          <section
+            className="section focused-entry monthly-table-panel"
+            id="entry-panel"
+            role="tabpanel"
+            aria-labelledby={`criterion-${criterion}`}
+          >
+            <div className="section-head">
+              <div>
+                <h3>{crit.label}</h3>
+                <p className="section-description">
+                  January–October 2026 · {office?.short || office?.name}
+                </p>
               </div>
-              <p className="entry-hint">{crit.hint}</p>
-              {criterion === "timeliness" && calendarError && (
-                <ErrorState error={calendarError} />
-              )}
-              <div className="month-grid">
-                {[month].map((i) => {
-                  const m = MONTHS[i];
-                  return (
-                    <div className="month-cell" key={m}>
-                      {criterion === "timeliness" && (
-                        <>
-                          <div
-                            className="entry-mode"
-                            role="group"
-                            aria-label="How to enter timeliness"
-                          >
-                            <button
-                              className={!manualDays ? "selected" : ""}
-                              aria-pressed={!manualDays}
-                              disabled={busy}
-                              onClick={() => setManualDays(false)}
-                            >
-                              Use dates
-                            </button>
-                            <button
-                              className={manualDays ? "selected" : ""}
-                              aria-pressed={manualDays}
-                              disabled={
-                                busy ||
-                                Boolean(dates[i].released || dates[i].received)
-                              }
-                              onClick={() => setManualDays(true)}
-                            >
-                              Enter days manually
-                            </button>
-                          </div>
-                          {!manualDays && (
-                            <div className="date-pair">
-                              <div>
-                                <label htmlFor={`release-${i}`}>
-                                  Date released
-                                </label>
+              <div className="monthly-table-actions">
+                {criterion === "timeliness" && (
+                  <button
+                    className="btn small secondary"
+                    disabled={busy}
+                    aria-pressed={manualDays}
+                    onClick={() => setManualDays((p) => !p)}
+                  >
+                    {manualDays ? "Use dates" : "Enter days instead"}
+                  </button>
+                )}
+                <button
+                  className={`btn small ${editAll ? "" : "secondary"}`}
+                  disabled={busy}
+                  aria-pressed={editAll}
+                  onClick={() => {
+                    setEditAll((p) => !p);
+                    setEditedMonth(null);
+                  }}
+                >
+                  <Icon name="edit" size={14} />
+                  {editAll ? "Done editing" : "Edit all"}
+                </button>
+              </div>
+            </div>
+            <p className="table-entry-hint">
+              {crit.hint}
+              {criterion === "timeliness"
+                ? " Months with no negative comments need no submission."
+                : ""}
+            </p>
+            {criterion === "timeliness" && calendarError && (
+              <ErrorState error={calendarError} />
+            )}
+            <div className="table-wrap">
+              <table
+                className={`monthly-entry-table ${criterion === "timeliness" ? "dates-entry-table" : ""}`}
+              >
+                <thead>
+                  <tr>
+                    <th>Month</th>
+                    {criterion === "timeliness" ? (
+                      <>
+                        <th>Date released</th>
+                        <th>Date received</th>
+                        <th className="num">Working days</th>
+                      </>
+                    ) : (
+                      inputFields.map((field) => (
+                        <th key={field.key}>{field.label}</th>
+                      ))
+                    )}
+                    {criterion !== "gpr" && (
+                      <th className="num">
+                        {criterion === "timeliness"
+                          ? "Timeliness score"
+                          : "Resolution rate".replace(
+                              "Resolution",
+                              criterion === "collection"
+                                ? "Collection"
+                                : "Resolution",
+                            )}
+                      </th>
+                    )}
+                    <th>
+                      <span className="sr-only">Edit row</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {MONTHS.map((m, i) => {
+                    const editing = editAll || editedMonth === i;
+                    const zeroNegative = second[i] === "0";
+                    const noSubmission =
+                      criterion === "timeliness" && noSubmissionRequired(i);
+                    const rawScore = liveScore(i);
+                    const score =
+                      criterion === "timeliness" && rawScore !== "—"
+                        ? fmtPct(Number(rawScore))
+                        : rawScore;
+                    return (
+                      <tr
+                        key={m}
+                        className={`${editing ? "editing-row" : ""} ${noSubmission ? "not-required-row" : ""}`}
+                      >
+                        <th scope="row">{m}</th>
+                        {criterion === "timeliness" ? (
+                          <>
+                            {(["released", "received"] as const).map(
+                              (key, j) => (
+                                <td key={key}>
+                                  {noSubmission ? (
+                                    <span className="not-required-text">
+                                      Not required
+                                    </span>
+                                  ) : editing && !manualDays ? (
+                                    <input
+                                      id={`${j === 0 ? "release" : "receive"}-${i}`}
+                                      type="date"
+                                      aria-label={`${m} Date ${key}`}
+                                      min={
+                                        j === 0
+                                          ? "2026-01-01"
+                                          : dates[i].released || "2026-01-01"
+                                      }
+                                      max="2026-12-31"
+                                      value={dates[i][key]}
+                                      disabled={busy || calendarLoading}
+                                      onChange={(e) =>
+                                        updateDate(i, key, e.target.value)
+                                      }
+                                    />
+                                  ) : (
+                                    <span>{dates[i][key] || "—"}</span>
+                                  )}
+                                </td>
+                              ),
+                            )}
+                            <td className="num">
+                              {noSubmission ? (
+                                <span className="not-required-text">
+                                  Not required
+                                </span>
+                              ) : editing && manualDays ? (
                                 <input
-                                  disabled={busy || calendarLoading}
-                                  id={`release-${i}`}
-                                  type="date"
-                                  min="2026-01-01"
-                                  max="2026-12-31"
-                                  value={dates[i].released}
-                                  onChange={(e) =>
-                                    updateDate(i, "released", e.target.value)
-                                  }
+                                  type="number"
+                                  aria-label={`${m} Working days`}
+                                  min={0}
+                                  step={1}
+                                  disabled={busy}
+                                  value={first[i]}
+                                  placeholder="—"
+                                  onChange={(e) => {
+                                    setFirst((p) =>
+                                      p.map((v, j) =>
+                                        j === i ? e.target.value : v,
+                                      ),
+                                    );
+                                    setDates((p) =>
+                                      p.map((d, j) =>
+                                        j === i
+                                          ? { released: "", received: "" }
+                                          : d,
+                                      ),
+                                    );
+                                    setDirty(true);
+                                    setMessage(null);
+                                  }}
                                 />
-                              </div>
-                              <div>
-                                <label htmlFor={`receive-${i}`}>
-                                  Date received
-                                </label>
-                                <input
-                                  disabled={busy || calendarLoading}
-                                  id={`receive-${i}`}
-                                  type="date"
-                                  min={dates[i].released || "2026-01-01"}
-                                  max="2026-12-31"
-                                  value={dates[i].received}
-                                  onChange={(e) =>
-                                    updateDate(i, "received", e.target.value)
-                                  }
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {(criterion !== "timeliness" || manualDays) && (
-                        <div className="entry-number-fields">
-                          <div>
-                            <label htmlFor={`f-${i}`}>{crit.first}</label>
-                            <input
-                              disabled={
-                                busy ||
-                                (criterion === "timeliness" &&
-                                  Boolean(
-                                    dates[i].released || dates[i].received,
-                                  ))
-                              }
-                              id={`f-${i}`}
-                              aria-label={`${m} ${crit.first}`}
-                              type="number"
-                              min={0}
-                              max={criterion === "gpr" ? 100 : undefined}
-                              step={criterion === "gpr" ? "0.01" : "1"}
-                              value={first[i]}
-                              placeholder="—"
-                              onChange={(e) => {
-                                setFirst((p) =>
-                                  p.map((v, j) =>
-                                    j === i ? e.target.value : v,
-                                  ),
-                                );
-                                setDirty(true);
-                                setMessage(null);
-                              }}
-                            />
-                          </div>
-                          {crit.second && (
-                            <div>
-                              <label htmlFor={`s-${i}`}>{crit.second}</label>
-                              <input
+                              ) : (
+                                <span>{first[i] || "—"}</span>
+                              )}
+                            </td>
+                          </>
+                        ) : (
+                          inputFields.map((field) => {
+                            const notRequired =
+                              criterion === "resolution" &&
+                              field.key === "first" &&
+                              zeroNegative;
+                            return (
+                              <td key={field.key}>
+                                {notRequired ? (
+                                  <span className="not-required-text">
+                                    Not required
+                                  </span>
+                                ) : editing ? (
+                                  <input
+                                    type="number"
+                                    id={`${field.key === "first" ? "f" : "s"}-${i}`}
+                                    aria-label={`${m} ${field.label}`}
+                                    min={0}
+                                    max={criterion === "gpr" ? 100 : undefined}
+                                    step={criterion === "gpr" ? "0.01" : "1"}
+                                    disabled={busy}
+                                    value={field.values[i]}
+                                    placeholder="—"
+                                    onChange={(e) => {
+                                      field.setValues((p) =>
+                                        p.map((v, j) =>
+                                          j === i ? e.target.value : v,
+                                        ),
+                                      );
+                                      if (
+                                        criterion === "resolution" &&
+                                        field.key === "second" &&
+                                        e.target.value === "0"
+                                      )
+                                        setFirst((p) =>
+                                          p.map((v, j) => (j === i ? "" : v)),
+                                        );
+                                      setDirty(true);
+                                      setMessage(null);
+                                    }}
+                                  />
+                                ) : (
+                                  <span>
+                                    {criterion === "gpr" &&
+                                    field.values[i] !== ""
+                                      ? Number(field.values[i]).toFixed(2)
+                                      : field.values[i] || "—"}
+                                  </span>
+                                )}
+                              </td>
+                            );
+                          })
+                        )}
+                        {criterion !== "gpr" && (
+                          <td className="num monthly-result">
+                            <b>{score}</b>
+                            {(noSubmission ||
+                              (criterion === "resolution" && zeroNegative)) && (
+                              <small>No action required</small>
+                            )}
+                          </td>
+                        )}
+                        <td>
+                          {noSubmission ? (
+                            <span className="badge green">Not required</span>
+                          ) : (
+                            !editAll && (
+                              <button
+                                className="row-edit-button"
                                 disabled={busy}
-                                id={`s-${i}`}
-                                aria-label={`${m} ${crit.second}`}
-                                type="number"
-                                min={0}
-                                step={1}
-                                value={second[i]}
-                                placeholder="—"
-                                onChange={(e) => {
-                                  setSecond((p) =>
-                                    p.map((v, j) =>
-                                      j === i ? e.target.value : v,
-                                    ),
-                                  );
-                                  setDirty(true);
-                                  setMessage(null);
-                                }}
-                              />
-                            </div>
+                                aria-label={`${editing ? "Done editing" : "Edit"} ${m}`}
+                                onClick={() =>
+                                  setEditedMonth(editing ? null : i)
+                                }
+                              >
+                                {editing ? "Done" : "Edit"}
+                                <Icon
+                                  name={editing ? "check" : "edit"}
+                                  size={13}
+                                />
+                              </button>
+                            )
                           )}
-                        </div>
-                      )}
-                      {criterion === "timeliness" && manualDays && (
-                        <p className="field-help">
-                          Enter 99 if the plan was due but not submitted. Leave
-                          blank if no plan was due.
-                        </p>
-                      )}
-                      {criterion === "timeliness" &&
-                        !manualDays &&
-                        first[i] !== "" &&
-                        !dates[i].released &&
-                        !dates[i].received && (
-                          <p className="field-help">
-                            A day count is already recorded. Choose “Enter days
-                            manually” to edit it, or enter dates to replace it.
-                          </p>
-                        )}
-                      {criterion === "timeliness" &&
-                        Boolean(dates[i].released || dates[i].received) && (
-                          <button
-                            className="clear-date-link"
-                            disabled={busy}
-                            onClick={() => {
-                              setDates((p) =>
-                                p.map((d, j) =>
-                                  j === i ? { released: "", received: "" } : d,
-                                ),
-                              );
-                              setFirst((p) =>
-                                p.map((v, j) => (j === i ? "" : v)),
-                              );
-                              setDirty(true);
-                              setMessage(null);
-                            }}
-                          >
-                            Clear dates for this month
-                          </button>
-                        )}
-                      <div className="entry-calculation" aria-live="polite">
-                        <div>
-                          <span>
-                            {criterion === "timeliness"
-                              ? "Working days elapsed"
-                              : criterion === "gpr"
-                                ? "Overall rating"
-                                : "Calculated rate"}
-                          </span>
-                          <strong>
-                            {criterion === "timeliness"
-                              ? first[i] === ""
-                                ? "—"
-                                : first[i]
-                              : liveScore(i)}
-                          </strong>
-                        </div>
-                        {criterion === "timeliness" && (
-                          <div>
-                            <span>Timeliness score</span>
-                            <strong>{liveScore(i)}</strong>
-                          </div>
-                        )}
-                        <p>
-                          {criterion === "timeliness"
-                            ? "Weekends and non-working days are excluded. Both dates are included."
-                            : "Calculated from your entries. Rankings update when you save."}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="month-navigation">
-                <button
-                  className="btn secondary small"
-                  disabled={busy || month === 0}
-                  onClick={() => {
-                    setMonth((m) => m - 1);
-                    setManualDays(false);
-                  }}
-                >
-                  ← Previous month
-                </button>
-                <span>
-                  {month + 1} of {MONTHS.length} months
-                </span>
-                <button
-                  className="btn secondary small"
-                  disabled={busy || month === MONTHS.length - 1}
-                  onClick={() => {
-                    setMonth((m) => m + 1);
-                    setManualDays(false);
-                  }}
-                >
-                  Next month →
-                </button>
-              </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="table-foot">
+              <span>All {MONTHS.length} reporting months shown</span>
+              <span>
+                {criterion === "resolution"
+                  ? "0 negatives = 100% · Suggestions excluded"
+                  : criterion === "timeliness"
+                    ? "0 negatives = no submission required"
+                    : "Blank values mean no data"}
+              </span>
             </div>
           </section>
           {message && (
@@ -630,8 +680,8 @@ export default function EnterPage() {
           <div className="save-bar">
             <p>
               {dirty
-                ? "Unsaved changes for this office and category."
-                : "All changes saved. You can move to another month."}
+                ? "You have unsaved changes for this office and category."
+                : "Select Edit on a month, or Edit all to update multiple months."}
             </p>
             <button
               className="btn"
@@ -647,79 +697,6 @@ export default function EnterPage() {
               {busy ? "Saving…" : "Save changes"}
             </button>
           </div>
-          <details className="section month-summary">
-            <summary>
-              <span>View all months</span>
-              <span>
-                {completeMonths} of {MONTHS.length} entered
-              </span>
-              <Icon name="down" size={15} />
-            </summary>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Reporting month</th>
-                    {criterion === "timeliness" ? (
-                      <>
-                        <th>Released</th>
-                        <th>Received</th>
-                        <th>Working days</th>
-                      </>
-                    ) : (
-                      <>
-                        <th>{crit.first}</th>
-                        {crit.second && <th>{crit.second}</th>}
-                      </>
-                    )}
-                    <th>{criterion === "timeliness" ? "Score" : "Result"}</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {MONTHS.map((m, i) => (
-                    <tr
-                      key={m}
-                      className={month === i ? "selected-month-row" : ""}
-                    >
-                      <td>{m} 2026</td>
-                      {criterion === "timeliness" ? (
-                        <>
-                          <td>{dates[i].released || "—"}</td>
-                          <td>{dates[i].received || "—"}</td>
-                          <td>{first[i] || "—"}</td>
-                        </>
-                      ) : (
-                        <>
-                          <td>{first[i] || "—"}</td>
-                          {crit.second && <td>{second[i] || "—"}</td>}
-                        </>
-                      )}
-                      <td>{liveScore(i)}</td>
-                      <td>
-                        <button
-                          className="summary-edit"
-                          disabled={busy}
-                          onClick={() => {
-                            setMonth(i);
-                            setManualDays(false);
-                            document
-                              .querySelector(".focused-entry")
-                              ?.scrollIntoView({
-                                behavior: "smooth",
-                                block: "start",
-                              });
-                          }}
-                        >
-                          Edit<span className="sr-only"> {m}</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </details>
         </>
       )}
       <dialog

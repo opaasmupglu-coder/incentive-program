@@ -33,13 +33,13 @@ export function TopBar() {
     .find((l) => l.href === pathname);
   return (
     <header className="topbar">
-      <div className="breadcrumbs">
-        <span>Incentive Program</span>
-        <span className="breadcrumb-slash">/</span>
-        <b>{current?.label || "Sign in"}</b>
+      <div className="topbar-heading" id="page-heading-slot">
+        <div className="header-fallback">
+          <h1>{current?.label || "Sign in"}</h1>
+        </div>
       </div>
       <div className="topbar-actions">
-        <span className="year-label">2026</span>
+        <div id="page-actions-slot" className="page-header-actions" />
         <button className="btn small secondary" onClick={openCustomize}>
           <Icon name="settings" size={16} />
           <span>Customize</span>

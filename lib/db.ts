@@ -2,7 +2,7 @@
 // The app computes everything itself from the Turso tables; the snapshot
 // shape matches what the UI pages already expect.
 import { getTurso, missingEnv } from "./turso";
-import { ensureCalendar } from "./calendar";
+import { ensureCalendar, zeroNegativeSubmissionCleanup } from "./calendar";
 import {
   assignRanks,
   buildChecks,
@@ -452,11 +452,39 @@ export async function writeMonthly(
   const db = getTurso();
   if (!db)
     throw new Error("Database is not connected (missing Turso env vars).");
-  const stmts = buildMonthlyStatements(code, criterion, months);
-  if (criterion === "timeliness" && months.dates) {
+  const normalized = {
+    ...months,
+    first: [...months.first],
+    dates: months.dates?.map((d) => ({ ...d })),
+  };
+  const zeroMonths =
+    criterion === "resolution"
+      ? (months.second || []).flatMap((count, i) =>
+          count === 0 ? [i + 1] : [],
+        )
+      : criterion === "timeliness"
+        ? (
+            await db.execute({
+              sql: "SELECT month FROM monthly_resolution WHERE office_code=? AND plans=0 AND month BETWEEN 1 AND 10",
+              args: [code],
+            })
+          ).rows.map((r) => Number(r.month))
+        : [];
+  if (zeroMonths.length) await ensureCalendar();
+  if (criterion === "timeliness")
+    for (const m of zeroMonths) {
+      normalized.first[m - 1] = null;
+      if (normalized.dates)
+        normalized.dates[m - 1] = { released: "", received: "" };
+    }
+  const stmts = [
+    ...zeroMonths.flatMap((m) => zeroNegativeSubmissionCleanup(code, m)),
+    ...buildMonthlyStatements(code, criterion, normalized),
+  ];
+  if (criterion === "timeliness" && normalized.dates) {
     await ensureCalendar();
     for (let i = 0; i < 10; i++) {
-      const date = months.dates[i];
+      const date = normalized.dates[i];
       stmts.push(
         date?.released && date?.received
           ? {

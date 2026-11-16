@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { writeMonthly, type Criterion } from "@/lib/db";
 import { getCalendar } from "@/lib/calendar";
 import { countWorkingDays } from "@/lib/working-days";
+import { getTurso } from "@/lib/turso";
 
 export const dynamic = "force-dynamic";
 
@@ -61,10 +62,21 @@ export async function POST(req: NextRequest) {
       )
     )
       return NextResponse.json(
-        { error: "Acted-upon items cannot exceed items with action plans." },
+        { error: "Total Acted Upon cannot exceed Total Negative Comments." },
         { status: 400 },
       );
     let dates: { released: string; received: string }[] | undefined;
+    const zeroMonths =
+      criterion === "timeliness"
+        ? new Set(
+            (
+              await getTurso()?.execute({
+                sql: "SELECT month FROM monthly_resolution WHERE office_code=? AND plans=0",
+                args: [code],
+              })
+            )?.rows.map((r) => Number(r.month)) || [],
+          )
+        : new Set<number>();
     if (criterion === "timeliness" && Array.isArray(body.dates)) {
       dates = body.dates
         .slice(0, 10)
@@ -74,6 +86,11 @@ export async function POST(req: NextRequest) {
         }));
       const calendar = await getCalendar();
       for (let i = 0; i < dates!.length; i++) {
+        if (zeroMonths.has(i + 1)) {
+          dates![i] = { released: "", received: "" };
+          numbers[i] = null;
+          continue;
+        }
         const d = dates![i];
         if (!d.released && !d.received) continue;
         const count = countWorkingDays(calendar, d.released, d.received);

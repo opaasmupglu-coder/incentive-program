@@ -234,11 +234,13 @@ export default function RankingsPage() {
                         ))}
                         <td>
                           <span
-                            className={`badge ${r.entered === 4 ? "green" : r.entered ? "amber" : "neutral"}`}
+                            className={`badge ${!r.provisional ? "green" : r.entered ? "amber" : "neutral"}`}
                           >
-                            {r.entered === 4
+                            {!r.provisional
                               ? "Complete"
-                              : `${r.entered} of 4 criteria`}
+                              : r.entered === 4
+                                ? "Pending monthly counts"
+                                : `${r.entered} of 4 criteria`}
                           </span>
                         </td>
                       </tr>

@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 /** Page header: kicker + display heading + one plain sentence. */
 export function PageHead({
@@ -12,15 +14,27 @@ export function PageHead({
   description: string;
   right?: ReactNode;
 }) {
+  const [slots, setSlots] = useState<{
+    heading: HTMLElement;
+    actions: HTMLElement;
+  } | null>(null);
+  useEffect(() => {
+    const heading = document.getElementById("page-heading-slot");
+    const actions = document.getElementById("page-actions-slot");
+    if (heading && actions) setSlots({ heading, actions });
+  }, []);
+  if (!slots) return null;
   return (
-    <div className="page-head">
-      <div>
-        <p className="kicker">{kicker}</p>
-        <h1>{title}</h1>
-        <p className="lede">{description}</p>
-      </div>
-      {right && <div>{right}</div>}
-    </div>
+    <>
+      {createPortal(
+        <div className="page-heading-content">
+          <h1>{title}</h1>
+          <p className="lede">{description}</p>
+        </div>,
+        slots.heading,
+      )}
+      {right && createPortal(right, slots.actions)}
+    </>
   );
 }
 

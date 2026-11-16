@@ -13,7 +13,11 @@ import type {
 
 export type SettingsMap = Record<string, string>;
 
-export function numSetting(s: SettingsMap, key: string, fallback: number): number {
+export function numSetting(
+  s: SettingsMap,
+  key: string,
+  fallback: number,
+): number {
   const v = parseFloat(s[key] ?? "");
   return Number.isFinite(v) ? v : fallback;
 }
@@ -25,8 +29,14 @@ export type MonthlyInput = {
   timeliness: Map<number, number | null>;
 };
 
-export function resolutionRate(acted: number | null, plans: number | null): number | null {
-  if (acted === null || plans === null || plans === 0) return null;
+export function resolutionRate(
+  acted: number | null,
+  plans: number | null,
+): number | null {
+  if (plans === null) return null;
+  // A confirmed zero negative-comment count needs no corrective action.
+  if (plans === 0) return acted !== null && acted > 0 ? null : 1;
+  if (acted === null) return null;
   return acted / plans;
 }
 
@@ -34,17 +44,21 @@ export function collectionRate(
   forms: number | null,
   clients: number | null,
   sampleConstant: number,
-  minForms: number
+  minForms: number,
 ): number | null {
   if (forms === null || clients === null) return null;
   if (forms < minForms) return 0;
   // The sheet checks the minimum first, including recorded zero-visitor months.
   if (clients <= 0) return null;
-  const rate = forms / (clients * sampleConstant / ((clients - 1) + sampleConstant));
+  const rate =
+    forms / ((clients * sampleConstant) / (clients - 1 + sampleConstant));
   return Math.min(1, rate);
 }
 
-export function timelinessScore(days: number | null, bands: number[]): number | null {
+export function timelinessScore(
+  days: number | null,
+  bands: number[],
+): number | null {
   if (days === null) return null;
   if (days <= 3) return bands[0];
   if (days <= 5) return bands[1];
@@ -54,17 +68,28 @@ export function timelinessScore(days: number | null, bands: number[]): number | 
   return bands[5];
 }
 
-function avg(values: (number | null)[]): { avg: number | null; months: number } {
+function avg(values: (number | null)[]): {
+  avg: number | null;
+  months: number;
+} {
   const real = values.filter((v): v is number => v !== null);
   if (real.length === 0) return { avg: null, months: 0 };
-  return { avg: real.reduce((a, b) => a + b, 0) / real.length, months: real.length };
+  return {
+    avg: real.reduce((a, b) => a + b, 0) / real.length,
+    months: real.length,
+  };
 }
 
 export type OfficeComputation = {
   code: string;
   name: string;
   track: string;
-  monthly: { resolution: MonthlyRow; collection: MonthlyRow; gpr: MonthlyRow; timeliness: MonthlyRow };
+  monthly: {
+    resolution: MonthlyRow;
+    collection: MonthlyRow;
+    gpr: MonthlyRow;
+    timeliness: MonthlyRow;
+  };
   initial: InitialRow;
 };
 
@@ -72,15 +97,35 @@ export type OfficeComputation = {
 export function computeOffice(
   office: Office,
   input: MonthlyInput,
-  settings: SettingsMap
+  settings: SettingsMap,
 ): OfficeComputation {
   const isFL = office.track === "Frontline";
-  const wRes = numSetting(settings, isFL ? "fl_res_weight" : "nf_res_weight", 0);
-  const wColl = numSetting(settings, isFL ? "fl_coll_weight" : "nf_coll_weight", 0);
-  const wGpr = numSetting(settings, isFL ? "fl_gpr_weight" : "nf_gpr_weight", 0);
-  const wTime = numSetting(settings, isFL ? "fl_time_weight" : "nf_time_weight", 0);
+  const wRes = numSetting(
+    settings,
+    isFL ? "fl_res_weight" : "nf_res_weight",
+    0,
+  );
+  const wColl = numSetting(
+    settings,
+    isFL ? "fl_coll_weight" : "nf_coll_weight",
+    0,
+  );
+  const wGpr = numSetting(
+    settings,
+    isFL ? "fl_gpr_weight" : "nf_gpr_weight",
+    0,
+  );
+  const wTime = numSetting(
+    settings,
+    isFL ? "fl_time_weight" : "nf_time_weight",
+    0,
+  );
   const sampleConstant = numSetting(settings, "sample_constant", 384.16);
-  const minForms = numSetting(settings, isFL ? "min_forms_fl" : "min_forms_nfl", 0);
+  const minForms = numSetting(
+    settings,
+    isFL ? "min_forms_fl" : "min_forms_nfl",
+    0,
+  );
   const bands = [
     numSetting(settings, "time_band_1_3", 1.0),
     numSetting(settings, "time_band_4_5", 0.8),
@@ -110,11 +155,13 @@ export function computeOffice(
     collFirst.push(c.forms);
     collSecond.push(c.clients);
     gprFirst.push(g);
-    timeFirst.push(d);
+    timeFirst.push(r.plans === 0 ? null : d);
     resRates.push(resolutionRate(r.acted, r.plans));
-    collRates.push(collectionRate(c.forms, c.clients, sampleConstant, minForms));
+    collRates.push(
+      collectionRate(c.forms, c.clients, sampleConstant, minForms),
+    );
     gprRates.push(g === null ? null : g / 100);
-    timeScores.push(timelinessScore(d, bands));
+    timeScores.push(r.plans === 0 ? 1 : timelinessScore(d, bands));
   }
 
   const res = avg(resRates);
@@ -123,14 +170,24 @@ export function computeOffice(
   const time = avg(timeScores);
 
   const missing: string[] = [];
-  if (res.avg === null) missing.push("Resolution");
+  const pendingNegativeCounts = [...input.resolution.values()].some(
+    (r) => r.plans !== null && r.plans > 0 && r.acted === null,
+  );
+  if (res.avg === null || pendingNegativeCounts) missing.push("Resolution");
   if (coll.avg === null) missing.push("Collection");
   if (gpr.avg === null) missing.push("GPR");
-  if (time.avg === null) missing.push("Timeliness");
+  const pendingSubmissionDates = [...input.resolution.entries()].some(
+    ([month, r]) =>
+      r.plans !== null && r.plans > 0 && input.timeliness.get(month) == null,
+  );
+  if (time.avg === null || pendingSubmissionDates) missing.push("Timeliness");
 
   const total =
     missing.length === 0
-      ? res.avg! * wRes + coll.avg! * wColl + gpr.avg! * wGpr + time.avg! * wTime
+      ? res.avg! * wRes +
+        coll.avg! * wColl +
+        gpr.avg! * wGpr +
+        time.avg! * wTime
       : null;
 
   return {
@@ -138,10 +195,30 @@ export function computeOffice(
     name: office.name,
     track: office.track,
     monthly: {
-      resolution: { code: office.code, first: resFirst, second: resSecond, computed: resRates },
-      collection: { code: office.code, first: collFirst, second: collSecond, computed: collRates },
-      gpr: { code: office.code, first: gprFirst, second: Array(10).fill(null), computed: gprRates },
-      timeliness: { code: office.code, first: timeFirst, second: Array(10).fill(null), computed: timeScores },
+      resolution: {
+        code: office.code,
+        first: resFirst,
+        second: resSecond,
+        computed: resRates,
+      },
+      collection: {
+        code: office.code,
+        first: collFirst,
+        second: collSecond,
+        computed: collRates,
+      },
+      gpr: {
+        code: office.code,
+        first: gprFirst,
+        second: Array(10).fill(null),
+        computed: gprRates,
+      },
+      timeliness: {
+        code: office.code,
+        first: timeFirst,
+        second: Array(10).fill(null),
+        computed: timeScores,
+      },
     },
     initial: {
       code: office.code,
@@ -163,7 +240,10 @@ export function computeOffice(
 }
 
 /** Assign competition ranks (ties share a rank) and unique tie-break ranks. */
-export function assignRanks(rows: InitialRow[], sortOrder: Map<string, number>): void {
+export function assignRanks(
+  rows: InitialRow[],
+  sortOrder: Map<string, number>,
+): void {
   const withTotal = rows.filter((r) => r.total !== null);
   for (const r of rows) {
     if (r.total === null) {
@@ -185,19 +265,25 @@ export function assignRanks(rows: InitialRow[], sortOrder: Map<string, number>):
 export function officeTotal(
   scores: (number | null)[],
   weights: number[],
-  scale: number
+  scale: number,
 ): number | null {
   if (scores.some((s) => s === null)) return null;
-  return scores.reduce<number>((sum, s, i) => sum + ((s as number) / scale) * weights[i], 0);
+  return scores.reduce<number>(
+    (sum, s, i) => sum + ((s as number) / scale) * weights[i],
+    0,
+  );
 }
 
 export function focalTotal(
   scores: (number | null)[],
   weights: number[],
-  scale: number
+  scale: number,
 ): number | null {
   if (scores.some((s) => s === null)) return null;
-  return scores.reduce<number>((sum, s, i) => sum + ((s as number) / scale) * weights[i], 0);
+  return scores.reduce<number>(
+    (sum, s, i) => sum + ((s as number) / scale) * weights[i],
+    0,
+  );
 }
 
 export type ScoreEntry = {
@@ -214,7 +300,7 @@ export function buildValidators(
   top5FL: InitialRow[],
   top5NFL: InitialRow[],
   settings: SettingsMap,
-  scores: ScoreEntry[]
+  scores: ScoreEntry[],
 ): { validators: ValidatorRow[]; validatorAvg: ValidatorAvgRow[] } {
   const validatorNames = [
     settings["validator_1"] || "",
@@ -249,10 +335,17 @@ export function buildValidators(
       const focalPerValidator: (number | null)[] = [];
       validatorNames.forEach((validator, vi) => {
         const entry = scores.find(
-          (s) => s.track === track && s.office_code === office.code && s.validator === validator
+          (s) =>
+            s.track === track &&
+            s.office_code === office.code &&
+            s.validator === validator,
         );
-        const officeScores = entry ? entry.officeScores : [null, null, null, null];
-        const focalScores = entry ? entry.focalScores : [null, null, null, null, null];
+        const officeScores = entry
+          ? entry.officeScores
+          : [null, null, null, null];
+        const focalScores = entry
+          ? entry.focalScores
+          : [null, null, null, null, null];
         const oTotal = officeTotal(officeScores, officeW, scale);
         const fTotal = focalTotal(focalScores, focalW, scale);
         if (oTotal !== null) officePerValidator.push(oTotal);
@@ -273,16 +366,24 @@ export function buildValidators(
           sheetRow: baseRow + idx * 3 + vi,
         });
       });
-      const ratedOffice = officePerValidator.filter((v) => v !== null) as number[];
-      const ratedFocal = focalPerValidator.filter((v) => v !== null) as number[];
+      const ratedOffice = officePerValidator.filter(
+        (v) => v !== null,
+      ) as number[];
+      const ratedFocal = focalPerValidator.filter(
+        (v) => v !== null,
+      ) as number[];
       avgRows.push({
         code: office.code,
         name: office.name,
         officePerValidator,
-        officeAvg: ratedOffice.length ? ratedOffice.reduce((a, b) => a + b, 0) / ratedOffice.length : null,
+        officeAvg: ratedOffice.length
+          ? ratedOffice.reduce((a, b) => a + b, 0) / ratedOffice.length
+          : null,
         officeRatedCount: ratedOffice.length,
         focalPerValidator,
-        focalAvg: ratedFocal.length ? ratedFocal.reduce((a, b) => a + b, 0) / ratedFocal.length : null,
+        focalAvg: ratedFocal.length
+          ? ratedFocal.reduce((a, b) => a + b, 0) / ratedFocal.length
+          : null,
         focalRatedCount: ratedFocal.length,
       });
     });
@@ -294,7 +395,7 @@ export function buildValidators(
 export function buildFinals(
   top5: InitialRow[],
   avgRows: ValidatorAvgRow[],
-  settings: SettingsMap
+  settings: SettingsMap,
 ): { offices: FinalRow[]; focals: FinalRow[] } {
   const mix = numSetting(settings, "final_initial_weight", 0.6);
   const offices: FinalRow[] = [];
@@ -303,11 +404,15 @@ export function buildFinals(
     const avg = avgRows.find((a) => a.code === office.code);
     const initial60 = office.total !== null ? office.total * mix : null;
     const offFinal =
-      initial60 !== null && avg?.officeAvg !== null && avg?.officeAvg !== undefined
+      initial60 !== null &&
+      avg?.officeAvg !== null &&
+      avg?.officeAvg !== undefined
         ? initial60 + (avg.officeAvg as number)
         : null;
     const focFinal =
-      initial60 !== null && avg?.focalAvg !== null && avg?.focalAvg !== undefined
+      initial60 !== null &&
+      avg?.focalAvg !== null &&
+      avg?.focalAvg !== undefined
         ? initial60 + (avg.focalAvg as number)
         : null;
     offices.push({
@@ -344,7 +449,10 @@ export function buildFinals(
   const rankList = (rows: FinalRow[]) => {
     const done = rows.filter((r) => r.finalTotal !== null);
     for (const r of rows) {
-      r.rank = r.finalTotal === null ? null : 1 + done.filter((o) => o.finalTotal! > r.finalTotal!).length;
+      r.rank =
+        r.finalTotal === null
+          ? null
+          : 1 + done.filter((o) => o.finalTotal! > r.finalTotal!).length;
     }
   };
   rankList(offices);
@@ -388,23 +496,91 @@ export function buildChecks(input: {
     numSetting(s, "focal_w_prof", 0) +
     numSetting(s, "focal_w_comms", 0);
   const flCount = input.offices.filter((o) => o.track === "Frontline").length;
-  const nfCount = input.offices.filter((o) => o.track === "Non-frontline").length;
+  const nfCount = input.offices.filter(
+    (o) => o.track === "Non-frontline",
+  ).length;
   return [
-    { label: "FL weights total 100%", result: String(Math.round(flTotal * 100) / 100), meaning: "Must be 100%." },
-    { label: "NFL weights total 100%", result: String(Math.round(nfTotal * 100) / 100), meaning: "Must be 100%." },
-    { label: "Office validator subtotal = 0.40", result: String(Math.round(officeSub * 100) / 100), meaning: "CAR + Onsite + Best + Interview." },
-    { label: "Focal validator subtotal = 0.40", result: String(Math.round(focalSub * 100) / 100), meaning: "CC-ARTA + Innovation + Responsiveness + Professionalism + Communication." },
-    { label: "Frontline offices", result: String(flCount), meaning: "Should be 17." },
-    { label: "Non-frontline offices", result: String(nfCount), meaning: "Should be 11." },
-    { label: "Input cells filled (all 4 monthly tables)", result: String(input.inputCellsFilled), meaning: "0 right now — no monthly numbers have been entered yet." },
-    { label: "FL offices with a complete Initial total", result: String(input.completeFL), meaning: "0 until monthly data is entered." },
-    { label: "NFL offices with a complete Initial total", result: String(input.completeNFL), meaning: "0 until monthly data is entered." },
-    { label: "FL top-5 slots filled", result: String(input.top5FL), meaning: "Should be 5 once 5 FL offices have complete Initial totals." },
-    { label: "NFL top-5 slots filled", result: String(input.top5NFL), meaning: "Should be 5 once 5 NFL offices have complete Initial totals." },
-    { label: "FL offices with a Final total", result: String(input.finalsFL), meaning: "Needs Initial + validator rating." },
-    { label: "NFL offices with a Final total", result: String(input.finalsNFL), meaning: "Needs Initial + validator rating." },
-    { label: "Validator rows fully rated (office items)", result: String(input.ratedOffice), meaning: "Out of 30 validator-office rows (top 5 × 3 validators × 2 tracks)." },
-    { label: "Validator rows fully rated (focal items)", result: String(input.ratedFocal), meaning: "Out of 30 validator-office rows." },
-    { label: "Computation errors", result: "0", meaning: "Should be 0 — blanks are intentional, errors are not." },
+    {
+      label: "FL weights total 100%",
+      result: String(Math.round(flTotal * 100) / 100),
+      meaning: "Must be 100%.",
+    },
+    {
+      label: "NFL weights total 100%",
+      result: String(Math.round(nfTotal * 100) / 100),
+      meaning: "Must be 100%.",
+    },
+    {
+      label: "Office validator subtotal = 0.40",
+      result: String(Math.round(officeSub * 100) / 100),
+      meaning: "CAR + Onsite + Best + Interview.",
+    },
+    {
+      label: "Focal validator subtotal = 0.40",
+      result: String(Math.round(focalSub * 100) / 100),
+      meaning:
+        "CC-ARTA + Innovation + Responsiveness + Professionalism + Communication.",
+    },
+    {
+      label: "Frontline offices",
+      result: String(flCount),
+      meaning: "Should be 17.",
+    },
+    {
+      label: "Non-frontline offices",
+      result: String(nfCount),
+      meaning: "Should be 11.",
+    },
+    {
+      label: "Input cells filled (all 4 monthly tables)",
+      result: String(input.inputCellsFilled),
+      meaning: "0 right now — no monthly numbers have been entered yet.",
+    },
+    {
+      label: "FL offices with a complete Initial total",
+      result: String(input.completeFL),
+      meaning: "0 until monthly data is entered.",
+    },
+    {
+      label: "NFL offices with a complete Initial total",
+      result: String(input.completeNFL),
+      meaning: "0 until monthly data is entered.",
+    },
+    {
+      label: "FL top-5 slots filled",
+      result: String(input.top5FL),
+      meaning: "Should be 5 once 5 FL offices have complete Initial totals.",
+    },
+    {
+      label: "NFL top-5 slots filled",
+      result: String(input.top5NFL),
+      meaning: "Should be 5 once 5 NFL offices have complete Initial totals.",
+    },
+    {
+      label: "FL offices with a Final total",
+      result: String(input.finalsFL),
+      meaning: "Needs Initial + validator rating.",
+    },
+    {
+      label: "NFL offices with a Final total",
+      result: String(input.finalsNFL),
+      meaning: "Needs Initial + validator rating.",
+    },
+    {
+      label: "Validator rows fully rated (office items)",
+      result: String(input.ratedOffice),
+      meaning:
+        "Out of 30 validator-office rows (top 5 × 3 validators × 2 tracks).",
+    },
+    {
+      label: "Validator rows fully rated (focal items)",
+      result: String(input.ratedFocal),
+      meaning: "Out of 30 validator-office rows.",
+    },
+    {
+      label: "Computation errors",
+      result: "0",
+      meaning: "Should be 0 — blanks are intentional, errors are not.",
+    },
   ];
 }

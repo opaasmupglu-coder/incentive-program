@@ -2,7 +2,12 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useSnapshot, freshnessText, fmtPct } from "@/components/useSnapshot";
-import { ErrorState, LoadingState, NotConnected } from "@/components/ui";
+import {
+  ErrorState,
+  LoadingState,
+  NotConnected,
+  PageHead,
+} from "@/components/ui";
 import Icon from "@/components/Icon";
 import { usePreferences } from "@/components/Preferences";
 
@@ -75,29 +80,28 @@ export default function OverviewPage() {
   const currentPage = Math.min(page, pageCount);
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1>Overview</h1>
-          <p className="lede">
-            Track office progress and see what needs your attention.
-          </p>
-        </div>
-        <button
-          className="btn secondary small"
-          disabled={syncing}
-          onClick={async () => {
-            setSyncing(true);
-            try {
-              await refresh();
-            } finally {
-              setSyncing(false);
-            }
-          }}
-        >
-          <Icon name="refresh" size={15} />
-          {syncing ? "Refreshing…" : "Refresh"}
-        </button>
-      </div>
+      <PageHead
+        kicker="Program"
+        title="Overview"
+        description="Track office progress and see what needs your attention."
+        right={
+          <button
+            className="btn secondary small"
+            disabled={syncing}
+            onClick={async () => {
+              setSyncing(true);
+              try {
+                await refresh();
+              } finally {
+                setSyncing(false);
+              }
+            }}
+          >
+            <Icon name="refresh" size={15} />
+            {syncing ? "Refreshing…" : "Refresh"}
+          </button>
+        }
+      />
       {!snap.connected && <NotConnected missingEnv={snap.missingEnv} />}
       <section className="next-task" aria-labelledby="next-task-title">
         <span className="next-task-icon">
@@ -231,13 +235,15 @@ export default function OverviewPage() {
                         <td>
                           <div className="category-progress">
                             <span
-                              className={`badge ${count === 4 ? "green" : count ? "amber" : "neutral"}`}
+                              className={`badge ${r?.total != null ? "green" : count ? "amber" : "neutral"}`}
                             >
-                              {count === 4
+                              {r?.total != null
                                 ? "Complete"
-                                : count
-                                  ? `${count} of 4 entered`
-                                  : "No data yet"}
+                                : count === 4
+                                  ? "Pending monthly counts"
+                                  : count
+                                    ? `${count} of 4 entered`
+                                    : "No data yet"}
                             </span>
                             <div
                               className="category-dots"

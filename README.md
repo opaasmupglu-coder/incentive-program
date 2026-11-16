@@ -9,12 +9,28 @@ workbook; monthly inputs and validator scores start empty.
 ## How it works
 
 The workspace uses self-hosted Inter fonts, a compact sidebar, and a dashboard
-with one suggested next action. **Enter monthly scores** shows one office,
-reporting month, and category at a time. Month navigation keeps unsaved edits;
-an optional **View all months** summary lets you review and jump to another month.
-Save changes before switching office or category. Blank months mean no data and
+with one suggested next action. Each sidebar page places its title, description,
+and actions in the shared top header. **Enter monthly scores** shows all ten
+reporting months in one compact table for the selected office and category.
+Use a row's **Edit** button or **Edit all**, then save before switching office or
+category. There is no month selector or separate all-months view. Blank months mean no data and
 clear a previously saved month; zero remains an actual recorded value. Overall
 ratings accept percentages with decimals (for example, 95.63).
+
+The four categories are visible tabs, with arrow-key navigation and protection
+for unsaved changes. **Action plans resolved** shows **Total Negative Comments**
+first and **Total Acted Upon** second. Suggestions are excluded. Confirmed
+zero-negative months automatically score 100% and need no acted-upon entry.
+These months also need no submission dates and automatically score 100% for
+timeliness. Existing dates are archived in `submission_date_archive` before
+being removed from active data. The API prevents saving submission dates for
+confirmed zero-negative months.
+Months with negative comments need an acted-upon count; unresolved missing counts
+keep the office's official initial total incomplete, while preview totals remain
+available. Internally the existing `monthly_resolution.plans` column stores the
+negative-comment denominator; `acted` retains the numerator.
+Required months that still lack submission data also keep the official score
+incomplete. The running ranking preview remains available.
 
 **Validator ratings** separates office and focal-person questions into tabs and
 keeps the progress table collapsed until needed. Rankings and final results
@@ -119,7 +135,10 @@ Do not create a second Vercel project for this app.
 
 ## Rules the app computes (same as the old sheet's formulas)
 
-- Resolution rate = acted/plans (blank if either is blank or plans = 0).
+- Resolution rate = total acted upon / total negative comments. Confirmed zero
+  negatives score 100%; a missing negative total or a positive negative total
+  with no acted-upon count remains pending. Acted-upon counts cannot exceed the
+  total negative comments.
 - Collection rate = min(1, forms / (clients × 384.16 / ((clients−1) + 384.16))),
   0 if forms < the track minimum (20 Frontline / 10 Non-frontline), blank if
   forms/clients are missing. The minimum-forms check precedes denominator
