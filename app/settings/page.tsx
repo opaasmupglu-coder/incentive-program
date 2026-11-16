@@ -64,6 +64,10 @@ export default function SettingsPage() {
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [focal, setFocal] = useState<Record<string, { name: string; position: string }>>({});
+  const [focalLoaded, setFocalLoaded] = useState(false);
+  const [focalBusy, setFocalBusy] = useState(false);
+  const [focalMsg, setFocalMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   useEffect(() => {
     if (!snap?.settings || loaded) return;
@@ -106,6 +110,16 @@ export default function SettingsPage() {
     });
     setLoaded(true);
   }, [snap, loaded]);
+
+  useEffect(() => {
+    if (!snap?.offices || focalLoaded) return;
+    const next: Record<string, { name: string; position: string }> = {};
+    for (const o of snap.offices) {
+      next[o.code] = { name: o.focal || "", position: o.focalPosition || "" };
+    }
+    setFocal(next);
+    setFocalLoaded(true);
+  }, [snap, focalLoaded]);
 
   if (loading) return <LoadingState />;
   if (error) return <ErrorState error={error} />;
@@ -158,6 +172,44 @@ export default function SettingsPage() {
     } else {
       const data = await res.json().catch(() => ({}));
       setMsg({ text: data.error || "Could not save.", ok: false });
+    }
+  }
+
+  async function saveFocal() {
+    if (!snap) return;
+    setFocalBusy(true);
+    setSaving(true);
+    setFocalMsg(null);
+    const changed = snap.offices
+      .map((o) => ({
+        code: o.code,
+        focal: (focal[o.code]?.name ?? "").trim(),
+        focalPosition: (focal[o.code]?.position ?? "").trim(),
+      }))
+      .filter((r) => {
+        const orig = snap.offices.find((o) => o.code === r.code);
+        return r.focal !== (orig?.focal || "") || r.focalPosition !== (orig?.focalPosition || "");
+      });
+    if (changed.length === 0) {
+      setFocalMsg({ text: "No focal-person changes to save.", ok: false });
+      setFocalBusy(false);
+      setSaving(false);
+      return;
+    }
+    const res = await fetch("/api/offices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ offices: changed }),
+    });
+    setFocalBusy(false);
+    setSaving(false);
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setFocalMsg({ text: `Saved focal persons for ${data.updated ?? changed.length} office(s).`, ok: true });
+      await refresh();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setFocalMsg({ text: data.error || "Could not save.", ok: false });
     }
   }
 
@@ -216,6 +268,7 @@ export default function SettingsPage() {
                     <th>Office</th>
                     <th>Track</th>
                     <th>Focal person</th>
+                    <th>Position</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -227,14 +280,51 @@ export default function SettingsPage() {
                       </td>
                       <td>{o.track}</td>
                       <td>
-                        {o.focal || "—"}
-                        {o.focalPosition ? ` — ${o.focalPosition}` : ""}
+                        <input
+                          type="text"
+                          aria-label={`Focal person for ${o.name}`}
+                          placeholder="—"
+                          value={focal[o.code]?.name ?? ""}
+                          onChange={(e) =>
+                            setFocal((prev) => ({
+                              ...prev,
+                              [o.code]: { name: e.target.value, position: prev[o.code]?.position ?? "" },
+                            }))
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          aria-label={`Focal position for ${o.name}`}
+                          placeholder="—"
+                          value={focal[o.code]?.position ?? ""}
+                          onChange={(e) =>
+                            setFocal((prev) => ({
+                              ...prev,
+                              [o.code]: { name: prev[o.code]?.name ?? "", position: e.target.value },
+                            }))
+                          }
+                        />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          )}
+          {snap.offices.length > 0 && (
+            <>
+              {focalMsg && (
+                <div className={`notice ${focalMsg.ok ? "ok" : "error"}`} role={focalMsg.ok ? "status" : "alert"}>
+                  <span className="notice-kicker">{focalMsg.ok ? "Saved" : "Error"}</span>
+                  {focalMsg.text}
+                </div>
+              )}
+              <button className="btn" onClick={saveFocal} disabled={focalBusy}>
+                {focalBusy ? "Saving…" : "Save focal persons"}
+              </button>
+            </>
           )}
         </div>
       </section>

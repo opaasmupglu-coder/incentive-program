@@ -452,3 +452,21 @@ export async function writeSettings(cells: { key: string; value: string | number
   }
   invalidateSnapshot();
 }
+
+/**
+ * Update focal persons for one or more offices. An empty name/position
+ * clears that field (blank = no focal person assigned yet).
+ */
+export async function writeOfficeFocals(
+  rows: { code: string; focal: string; focalPosition: string }[]
+): Promise<void> {
+  const db = getTurso();
+  if (!db) throw new Error("Database is not connected (missing Turso env vars).");
+  for (const r of rows) {
+    await db.execute({
+      sql: "UPDATE offices SET focal_name = ?, focal_position = ? WHERE code = ?",
+      args: [r.focal, r.focalPosition, r.code],
+    });
+  }
+  invalidateSnapshot();
+}
