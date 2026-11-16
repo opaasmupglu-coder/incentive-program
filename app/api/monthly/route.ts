@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { writeMonthly, type Criterion } from "@/lib/db";
-import { getCalendar } from "@/lib/calendar";
+import { getCalendar, ensureCalendar } from "@/lib/calendar";
 import { countWorkingDays } from "@/lib/working-days";
 import { getTurso } from "@/lib/turso";
 
@@ -62,16 +62,20 @@ export async function POST(req: NextRequest) {
       )
     )
       return NextResponse.json(
-        { error: "Total Acted Upon cannot exceed Total Negative Comments." },
+        {
+          error:
+            "Total Acted Upon cannot exceed Total Negative Comments + Suggestions.",
+        },
         { status: 400 },
       );
     let dates: { released: string; received: string }[] | undefined;
+    if (criterion === "timeliness") await ensureCalendar();
     const zeroMonths =
       criterion === "timeliness"
         ? new Set(
             (
               await getTurso()?.execute({
-                sql: "SELECT month FROM monthly_resolution WHERE office_code=? AND plans=0",
+                sql: "SELECT r.month FROM monthly_resolution r LEFT JOIN monthly_timeliness_basis b ON b.office_code=r.office_code AND b.month=r.month WHERE r.office_code=? AND (CASE WHEN b.office_code IS NOT NULL THEN b.feedback_count ELSE r.plans END)=0",
                 args: [code],
               })
             )?.rows.map((r) => Number(r.month)) || [],

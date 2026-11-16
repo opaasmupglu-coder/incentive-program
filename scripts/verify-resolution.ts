@@ -66,6 +66,28 @@ input.timeliness.set(2, 2);
 const completed = computeOffice(office, input, seed.settings);
 assert.equal(completed.initial.resolution, 0.75);
 assert.notEqual(completed.initial.total, null);
+// Suggestions expand resolution without changing submission requirements.
+input.timelinessBasis = new Map([
+  [1, 0],
+  [2, 2],
+]);
+const previousTimeliness = computeOffice(office, input, seed.settings).monthly
+  .timeliness;
+input.resolution.set(1, { acted: null, plans: 5 });
+const withSuggestions = computeOffice(office, input, seed.settings);
+assert.equal(withSuggestions.monthly.resolution.computed[0], null);
+assert.deepEqual(withSuggestions.monthly.timeliness, previousTimeliness);
+assert.equal(withSuggestions.monthly.timeliness.second[0], 0);
+assert.equal(withSuggestions.monthly.timeliness.computed[0], 1);
+input.resolution.set(2, { acted: 1, plans: 0 });
+assert.equal(
+  computeOffice(office, input, seed.settings).monthly.timeliness.computed[1],
+  1,
+);
+assert.equal(
+  computeOffice(office, input, seed.settings).monthly.timeliness.first[1],
+  2,
+);
 console.log(
-  "Resolution: zero negatives auto-score 100%; positive counts need acted-upon input; pending months stay provisional; 1/2 scores 50%.",
+  "Resolution: zero combined counts auto-score 100%; positive counts need acted-upon input; suggestions do not change independent timeliness scores or requirements.",
 );

@@ -27,6 +27,8 @@ export type MonthlyInput = {
   collection: Map<number, { forms: number | null; clients: number | null }>;
   gpr: Map<number, number | null>;
   timeliness: Map<number, number | null>;
+  // Retain the submission requirements separately when resolution includes suggestions.
+  timelinessBasis?: Map<number, number | null>;
 };
 
 export function resolutionRate(
@@ -34,7 +36,7 @@ export function resolutionRate(
   plans: number | null,
 ): number | null {
   if (plans === null) return null;
-  // A confirmed zero negative-comment count needs no corrective action.
+  // A confirmed zero combined negative-comment/suggestion count needs no action.
   if (plans === 0) return acted !== null && acted > 0 ? null : 1;
   if (acted === null) return null;
   return acted / plans;
@@ -156,23 +158,28 @@ export function computeOffice(
   const collSecond: (number | null)[] = [];
   const gprFirst: (number | null)[] = [];
   const timeFirst: (number | null)[] = [];
+  const timeSecond: (number | null)[] = [];
   for (let m = 1; m <= 10; m++) {
     const r = input.resolution.get(m) || { acted: null, plans: null };
     const c = input.collection.get(m) || { forms: null, clients: null };
     const g = input.gpr.get(m) ?? null;
     const d = input.timeliness.get(m) ?? null;
+    const submissionCount = input.timelinessBasis?.has(m)
+      ? (input.timelinessBasis.get(m) ?? null)
+      : r.plans;
     resFirst.push(r.acted);
     resSecond.push(r.plans);
     collFirst.push(c.forms);
     collSecond.push(c.clients);
     gprFirst.push(g);
-    timeFirst.push(r.plans === 0 ? null : d);
+    timeFirst.push(submissionCount === 0 ? null : d);
+    timeSecond.push(submissionCount);
     resRates.push(resolutionRate(r.acted, r.plans));
     collRates.push(
       collectionRate(c.forms, c.clients, sampleConstant, minForms),
     );
     gprRates.push(gprRate(g, c.forms, minForms));
-    timeScores.push(r.plans === 0 ? 1 : timelinessScore(d, bands));
+    timeScores.push(submissionCount === 0 ? 1 : timelinessScore(d, bands));
   }
 
   const res = avg(resRates);
@@ -187,9 +194,9 @@ export function computeOffice(
   if (res.avg === null || pendingNegativeCounts) missing.push("Resolution");
   if (coll.avg === null) missing.push("Collection");
   if (gpr.avg === null) missing.push("GPR");
-  const pendingSubmissionDates = [...input.resolution.entries()].some(
-    ([month, r]) =>
-      r.plans !== null && r.plans > 0 && input.timeliness.get(month) == null,
+  const pendingSubmissionDates = timeSecond.some(
+    (count, i) =>
+      count !== null && count > 0 && input.timeliness.get(i + 1) == null,
   );
   if (time.avg === null || pendingSubmissionDates) missing.push("Timeliness");
 
@@ -227,7 +234,7 @@ export function computeOffice(
       timeliness: {
         code: office.code,
         first: timeFirst,
-        second: Array(10).fill(null),
+        second: timeSecond,
         computed: timeScores,
       },
     },

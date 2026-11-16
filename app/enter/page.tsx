@@ -24,8 +24,8 @@ const criteria = [
     key: "resolution" as const,
     label: "Action plans resolved",
     first: "Total Acted Upon",
-    second: "Total Negative Comments",
-    hint: "Resolution rate = Total Acted Upon ÷ Total Negative Comments. Suggestions are excluded.",
+    second: "Total Negative Comments + Suggestions",
+    hint: "Resolution rate = Total Acted Upon ÷ combined negative comments and suggestions. Include both types in the acted-upon count.",
   },
   {
     key: "collection" as const,
@@ -159,7 +159,7 @@ export default function EnterPage() {
   if (error) return <ErrorState error={error} />;
   if (!snap) return <LoadingState />;
   const crit = criteria.find((c) => c.key === criterion)!;
-  // Preserve the API's numerator/denominator order while showing negatives first.
+  // Preserve the API's numerator/denominator order while showing the combined count first.
   const inputFields = [
     { key: "first", label: crit.first, values: first, setValues: setFirst },
     ...(crit.second
@@ -183,7 +183,7 @@ export default function EnterPage() {
     snap.inputCollection.find((r) => r.code === officeCode)?.first[i] ?? null;
   const num = (v: string) => (v.trim() === "" ? null : Number(v));
   const noSubmissionRequired = (i: number) =>
-    snap.inputResolution.find((r) => r.code === officeCode)?.second[i] === 0;
+    snap.inputTimeliness.find((r) => r.code === officeCode)?.second[i] === 0;
   const liveScore = (i: number) => {
     const a = num(first[i]),
       b = num(second[i]);
@@ -237,7 +237,7 @@ export default function EnterPage() {
       )
     ) {
       setMessage({
-        text: "Total Acted Upon cannot exceed Total Negative Comments.",
+        text: "Total Acted Upon cannot exceed Total Negative Comments + Suggestions.",
         ok: false,
       });
       return;
@@ -449,7 +449,7 @@ export default function EnterPage() {
               {(criterion === "collection" || criterion === "gpr") &&
                 ` Fewer than ${minForms} forms in a month scores 0% for both collection and GPR. The original GAR is kept for reference.`}
               {criterion === "timeliness"
-                ? " Months with no negative comments need no submission."
+                ? " Submission requirements remain based on negative comments only."
                 : ""}
             </p>
             {criterion === "timeliness" && calendarError && (
@@ -677,9 +677,9 @@ export default function EnterPage() {
               <span>All {MONTHS.length} reporting months shown</span>
               <span>
                 {criterion === "resolution"
-                  ? "0 negatives = 100% · Suggestions excluded"
+                  ? "0 negative comments + suggestions = 100%"
                   : criterion === "timeliness"
-                    ? "0 negatives = no submission required"
+                    ? "0 negative comments = no submission required"
                     : "Blank values mean no data"}
               </span>
             </div>

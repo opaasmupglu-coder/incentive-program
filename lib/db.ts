@@ -130,6 +130,7 @@ async function fetchSnapshot(): Promise<Snapshot> {
   if (missing.length > 0) return emptySnapshot(missing);
   const db = getTurso();
   if (!db) return emptySnapshot(["TURSO_DATABASE_URL"]);
+  await ensureCalendar();
 
   const [
     officesRes,
@@ -141,6 +142,7 @@ async function fetchSnapshot(): Promise<Snapshot> {
     scoresRes,
     prevRes,
     prizesRes,
+    timeBasisRes,
   ] = await Promise.all([
     db.execute(
       "SELECT code, short, full_name, track, focal_name, focal_position, notes, sort_order FROM offices ORDER BY sort_order",
@@ -162,6 +164,9 @@ async function fetchSnapshot(): Promise<Snapshot> {
     ),
     db.execute(
       "SELECT office_code, item, focal_name, focal_position, status, notes FROM prizes ORDER BY office_code, item",
+    ),
+    db.execute(
+      "SELECT office_code, month, feedback_count FROM monthly_timeliness_basis",
     ),
   ]);
 
@@ -223,6 +228,13 @@ async function fetchSnapshot(): Promise<Snapshot> {
     >();
     const gpr = new Map<number, number | null>();
     const time = new Map<number, number | null>();
+    const timelinessBasis = new Map<number, number | null>();
+    for (const r of timeBasisRes.rows)
+      if (r.office_code === office.code)
+        timelinessBasis.set(
+          Number(r.month),
+          r.feedback_count === null ? null : Number(r.feedback_count),
+        );
     for (const r of resByOffice.get(office.code) || [])
       res.set(Number(r.month), { acted: r.acted, plans: r.plans });
     for (const r of collByOffice.get(office.code) || [])
@@ -231,7 +243,13 @@ async function fetchSnapshot(): Promise<Snapshot> {
       gpr.set(Number(r.month), r.gpr);
     for (const r of timeByOffice.get(office.code) || [])
       time.set(Number(r.month), r.days);
-    return { resolution: res, collection: coll, gpr, timeliness: time };
+    return {
+      resolution: res,
+      collection: coll,
+      gpr,
+      timeliness: time,
+      timelinessBasis,
+    };
   };
 
   const computed = offices.map((o) =>
@@ -457,15 +475,31 @@ export async function writeMonthly(
     first: [...months.first],
     dates: months.dates?.map((d) => ({ ...d })),
   };
+  if (criterion === "resolution" || criterion === "timeliness")
+    await ensureCalendar();
+  const submissionBasis =
+    criterion === "resolution"
+      ? new Map(
+          (
+            await db.execute({
+              sql: "SELECT month, feedback_count FROM monthly_timeliness_basis WHERE office_code=?",
+              args: [code],
+            })
+          ).rows.map((r) => [Number(r.month), r.feedback_count]),
+        )
+      : new Map();
   const zeroMonths =
     criterion === "resolution"
       ? (months.second || []).flatMap((count, i) =>
-          count === 0 ? [i + 1] : [],
+          (submissionBasis.has(i + 1) ? submissionBasis.get(i + 1) : count) ===
+          0
+            ? [i + 1]
+            : [],
         )
       : criterion === "timeliness"
         ? (
             await db.execute({
-              sql: "SELECT month FROM monthly_resolution WHERE office_code=? AND plans=0 AND month BETWEEN 1 AND 10",
+              sql: "SELECT r.month FROM monthly_resolution r LEFT JOIN monthly_timeliness_basis b ON b.office_code=r.office_code AND b.month=r.month WHERE r.office_code=? AND (CASE WHEN b.office_code IS NOT NULL THEN b.feedback_count ELSE r.plans END)=0 AND r.month BETWEEN 1 AND 10",
               args: [code],
             })
           ).rows.map((r) => Number(r.month))

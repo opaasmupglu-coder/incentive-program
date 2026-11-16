@@ -11,6 +11,7 @@ export async function ensureCalendar() {
         [
           "CREATE TABLE IF NOT EXISTS working_days (date TEXT PRIMARY KEY, working INTEGER NOT NULL, note TEXT)",
           "CREATE TABLE IF NOT EXISTS timeliness_dates (office_code TEXT, month INTEGER, released TEXT, received TEXT, PRIMARY KEY(office_code, month))",
+          "CREATE TABLE IF NOT EXISTS monthly_timeliness_basis (office_code TEXT, month INTEGER, feedback_count INTEGER, PRIMARY KEY(office_code, month))",
           "CREATE TABLE IF NOT EXISTS submission_date_archive (id INTEGER PRIMARY KEY AUTOINCREMENT, office_code TEXT, month INTEGER, released TEXT, received TEXT, days INTEGER, archived_at TEXT, reason TEXT)",
         ],
         "write",
