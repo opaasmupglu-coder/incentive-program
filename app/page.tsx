@@ -40,274 +40,122 @@ export default function OverviewPage() {
   const rated =
     snap.validators.filter((r) => r.officeRated).length +
     snap.validators.filter((r) => r.focalRated).length;
-  const expectedRatings = top5 * 3 * 2;
+  const expectedRatings = snap.validators.length * 2;
   const finalCount = [...snap.finalFL.offices, ...snap.finalNFL.offices].filter(
     (r) => r.finalTotal !== null,
   ).length;
-  const steps = [
-    {
-      label: "Enter monthly numbers",
-      desc: `${started} of ${total} offices have monthly data`,
-      done: total > 0 && complete === total,
-      href: "/enter",
-    },
-    {
-      label: "Review initial rankings",
-      desc: `${complete} offices with all four criteria complete`,
-      done: total > 0 && complete === total && top5 > 0,
-      href: "/rankings",
-    },
-    {
-      label: "Validate the top 5",
-      desc: `${rated} of ${expectedRatings} office and focal ratings submitted`,
-      done: expectedRatings > 0 && rated === expectedRatings,
-      href: "/scores",
-    },
-    {
-      label: "Celebrate the results",
-      desc: `${finalCount} final office scores ready`,
-      done: top5 > 0 && finalCount === top5,
-      href: "/finals",
-    },
-  ];
-  const next = steps.find((s) => !s.done) || steps[3];
-  const doneCount = steps.filter((s) => s.done).length;
+  const next =
+    complete < total || total === 0
+      ? {
+          title: "Continue entering monthly scores",
+          description:
+            "Choose an office and a month. Enter one category at a time; calculations are automatic.",
+          href: "/enter",
+          action: "Enter monthly scores",
+          icon: "edit",
+        }
+      : expectedRatings > rated || top5 === 0
+        ? {
+            title: "Rate the qualifying offices",
+            description:
+              "Review the top offices, then enter each validator’s office and focal-person ratings.",
+            href: "/scores",
+            action: "Enter validator ratings",
+            icon: "check",
+          }
+        : {
+            title: "Review the final results",
+            description:
+              "Monthly scores and validator ratings have been tallied. Review the final standings for both tracks.",
+            href: "/finals",
+            action: "View final results",
+            icon: "trophy",
+          };
   const pageCount = Math.max(1, Math.ceil(filtered.length / 6));
   const currentPage = Math.min(page, pageCount);
   return (
     <>
       <div className="page-head">
         <div>
-          <h1>Program overview</h1>
+          <h1>Overview</h1>
           <p className="lede">
-            A clearer picture of your progress. A better experience for every
-            citizen.
+            Track office progress and see what needs your attention.
           </p>
         </div>
-        <div className="page-actions">
-          <button
-            className="icon-btn"
-            aria-label="Refresh program data"
-            disabled={syncing}
-            onClick={async () => {
-              setSyncing(true);
-              try {
-                await refresh();
-              } finally {
-                setSyncing(false);
-              }
-            }}
-          >
-            <Icon name="refresh" size={16} />
-          </button>
-          <Link className="btn" href="/enter">
-            <Icon name="edit" size={15} /> Enter monthly scores
-          </Link>
-        </div>
+        <button
+          className="btn secondary small"
+          disabled={syncing}
+          onClick={async () => {
+            setSyncing(true);
+            try {
+              await refresh();
+            } finally {
+              setSyncing(false);
+            }
+          }}
+        >
+          <Icon name="refresh" size={15} />
+          {syncing ? "Refreshing…" : "Refresh"}
+        </button>
       </div>
       {!snap.connected && <NotConnected missingEnv={snap.missingEnv} />}
-      <section className="welcome-banner" aria-labelledby="welcome-title">
+      <section className="next-task" aria-labelledby="next-task-title">
+        <span className="next-task-icon">
+          <Icon name={next.icon} size={23} />
+        </span>
         <div>
-          <p className="kicker">2026 CUSTOMER FEEDBACK INCENTIVE PROGRAM</p>
-          <h3 id="welcome-title">Great service deserves recognition.</h3>
-          <p>
-            Bring your monthly data, office evaluations, and final results
-            together in one simple workspace.
-          </p>
-          <Link className="btn small" href={next.href}>
-            {started === 0 ? "Let’s get started" : next.label}
-            <Icon name="arrow" size={14} />
-          </Link>
+          <span className="eyebrow">YOUR NEXT STEP</span>
+          <h2 id="next-task-title">{next.title}</h2>
+          <p>{next.description}</p>
         </div>
-        <div className="banner-art" aria-hidden="true">
-          <div className="art-orbit" />
-          <div className="art-sheet">
-            <span />
-            <span style={{ width: 30 }} />
-            <div className="art-bars">
-              <i />
-              <i />
-              <i />
-            </div>
-          </div>
-          <div className="art-badge">
-            <Icon name="check" size={24} />
-          </div>
-        </div>
+        <Link className="btn" href={next.href}>
+          {next.action}
+          <Icon name="arrow" size={15} />
+        </Link>
       </section>
-      <div className="stat-grid">
-        {[
-          {
-            title: "Participating offices",
-            value: total,
-            suffix: "",
-            icon: "building",
-            detail: `${snap.offices.filter((o) => o.track === "Frontline").length} frontline · ${snap.offices.filter((o) => o.track === "Non-frontline").length} non-frontline`,
-          },
-          {
-            title: "Initial evaluations",
-            value: complete,
-            suffix: `/ ${total}`,
-            icon: "chart",
-            detail: `${total ? Math.round((complete / total) * 100) : 0}% of offices complete`,
-          },
-          {
-            title: "Validation ratings",
-            value: rated,
-            suffix: `/ ${expectedRatings}`,
-            icon: "check",
-            detail: `${top5} offices selected for validation`,
-          },
-          {
-            title: "Final results ready",
-            value: finalCount,
-            suffix: `/ ${top5}`,
-            icon: "trophy",
-            detail: finalCount
-              ? "Ready to review final standings"
-              : "Waiting for complete evaluations",
-          },
-        ].map((stat) => (
-          <div className="stat-card" key={stat.title}>
-            <div className="stat-top">
-              <span>{stat.title}</span>
-              <span className="stat-icon">
-                <Icon name={stat.icon} size={16} />
-              </span>
-            </div>
-            <div className="big-number">
-              {snap.connected ? stat.value : "—"}
-              <small>{snap.connected && stat.suffix}</small>
-            </div>
-            <p>
-              {snap.connected
-                ? stat.detail
-                : "Connect your program to get started"}
-            </p>
-          </div>
-        ))}
-      </div>
-      <div className="dashboard-columns">
-        {preferences.showProgress && (
-          <section className="section" aria-labelledby="progress-title">
-            <div className="section-body">
-              <div className="panel-title">
-                <div>
-                  <h3 id="progress-title">Your program, step by step</h3>
-                  <p>Everything you need to move the program forward.</p>
-                </div>
-                <div className="mini-progress">
-                  <span>{doneCount}/4</span>
-                  <div className="progress-track">
-                    <span style={{ width: `${(doneCount / 4) * 100}%` }} />
-                  </div>
-                </div>
-              </div>
-              <ol className="flow-list">
-                {steps.map((step, i) => (
-                  <li
-                    key={step.label}
-                    className={
-                      step.done ? "done" : step === next ? "current" : ""
-                    }
-                  >
-                    <span className="flow-number">
-                      {step.done ? (
-                        <Icon name="check" size={14} />
-                      ) : (
-                        String(i + 1).padStart(2, "0")
-                      )}
-                    </span>
-                    <div className="flow-body">
-                      <Link href={step.href}>
-                        <b>{step.label}</b>
-                      </Link>
-                      <p>{step.desc}</p>
-                    </div>
-                    <span
-                      className={`badge ${step.done ? "green" : step === next ? "amber" : "neutral"}`}
-                    >
-                      {step.done
-                        ? "Complete"
-                        : step === next
-                          ? "Next up"
-                          : "Upcoming"}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          </section>
-        )}
-        <section
-          className="section"
-          aria-labelledby="quick-title"
-          style={
-            !preferences.showProgress ? { gridColumn: "1 / -1" } : undefined
-          }
-        >
-          <div className="section-body">
-            <div className="panel-title">
-              <div>
-                <h3 id="quick-title">A little less clicking</h3>
-                <p>Your most-used tools, right here.</p>
-              </div>
-              <Icon name="grid" size={16} style={{ color: "var(--muted)" }} />
-            </div>
-            <div className="quick-actions">
-              {[
-                {
-                  href: "/enter",
-                  icon: "edit",
-                  title: "Enter monthly numbers",
-                  desc: "Update an office’s four evaluation criteria",
-                },
-                {
-                  href: "/offices",
-                  icon: "people",
-                  title: "Manage focal persons",
-                  desc: "Edit names and positions in one place",
-                },
-                {
-                  href: "/rankings",
-                  icon: "chart",
-                  title: "Explore the rankings",
-                  desc: "See who’s leading in each track",
-                },
-              ].map((a) => (
-                <Link className="quick-action" key={a.href} href={a.href}>
-                  <span>
-                    <Icon name={a.icon} size={17} />
-                  </span>
-                  <span>
-                    <b>{a.title}</b>
-                    <small>{a.desc}</small>
-                  </span>
-                  <Icon name="arrow" size={15} />
-                </Link>
-              ))}
-            </div>
-            <div className="tip">
-              <Icon name="help" size={17} />
-              <p>
-                <b>A workspace that feels like yours.</b>
-                <br />
-                Use Customize above to change colors, density, and the sections
-                you see here.
-              </p>
-            </div>
-          </div>
-        </section>
+      <div className="overview-metrics" aria-label="Program totals">
+        <div>
+          <span>Participating offices</span>
+          <strong>{snap.connected ? total : "—"}</strong>
+          <small>
+            {snap.offices.filter((o) => o.track === "Frontline").length}{" "}
+            frontline ·{" "}
+            {snap.offices.filter((o) => o.track === "Non-frontline").length}{" "}
+            non-frontline
+          </small>
+        </div>
+        <div>
+          <span>Initial scores complete</span>
+          <strong>
+            {snap.connected ? complete : "—"}
+            <small> / {total}</small>
+          </strong>
+          <small>All four categories have data</small>
+        </div>
+        <div>
+          <span>Final results ready</span>
+          <strong>
+            {snap.connected ? finalCount : "—"}
+            <small> / {top5}</small>
+          </strong>
+          <small>{rated} validator ratings submitted</small>
+        </div>
       </div>
       {preferences.showOffices && (
-        <section className="section" aria-labelledby="offices-title">
+        <section
+          className="section office-progress-panel"
+          aria-labelledby="offices-title"
+        >
           <div className="section-head">
-            <h3 id="offices-title">Office overview</h3>
-            <p>
-              <Link className="text-link" href="/offices">
-                Manage offices <Icon name="arrow" size={13} />
-              </Link>
-            </p>
+            <div>
+              <h3 id="offices-title">Office progress</h3>
+              <p className="section-description">
+                Check an office’s progress or continue entering its scores.
+              </p>
+            </div>
+            <Link className="text-link" href="/offices">
+              Edit focal persons <Icon name="arrow" size={14} />
+            </Link>
           </div>
           <div className="toolbar">
             <div className="segmented" aria-label="Filter offices by track">
@@ -326,11 +174,11 @@ export default function OverviewPage() {
               ))}
             </div>
             <div className="search-field">
-              <Icon name="search" size={15} />
+              <Icon name="search" size={16} />
               <input
                 type="text"
                 aria-label="Search offices or focal persons"
-                placeholder="Search offices or people…"
+                placeholder="Find an office or person"
                 value={query}
                 onChange={(e) => {
                   setQuery(e.target.value);
@@ -344,12 +192,11 @@ export default function OverviewPage() {
               <thead>
                 <tr>
                   <th>Office</th>
-                  <th>Track</th>
-                  <th>Focal person</th>
-                  <th>Criteria complete</th>
+                  <th>Monthly categories</th>
                   <th className="num">Initial score</th>
-                  <th>Status</th>
-                  <th />
+                  <th>
+                    <span className="sr-only">Action</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -370,52 +217,52 @@ export default function OverviewPage() {
                         <td>
                           <div className="office-cell">
                             <span className="office-icon">
-                              {o.short?.slice(0, 4) || o.code.slice(0, 3)}
+                              <Icon name="building" size={17} />
                             </span>
                             <div>
                               <b>{o.name}</b>
-                              <small>{o.code}</small>
+                              <small>
+                                {o.track}
+                                {o.focal ? ` · ${o.focal}` : ""}
+                              </small>
                             </div>
                           </div>
                         </td>
                         <td>
-                          <span
-                            className={`badge ${o.track === "Frontline" ? "green" : "blue"}`}
-                          >
-                            {o.track}
-                          </span>
-                        </td>
-                        <td>
-                          {o.focal || <span className="sub">Unassigned</span>}
-                        </td>
-                        <td>
-                          <div className="progress-cell">
-                            <div className="progress-track">
-                              <span style={{ width: `${count * 25}%` }} />
+                          <div className="category-progress">
+                            <span
+                              className={`badge ${count === 4 ? "green" : count ? "amber" : "neutral"}`}
+                            >
+                              {count === 4
+                                ? "Complete"
+                                : count
+                                  ? `${count} of 4 entered`
+                                  : "No data yet"}
+                            </span>
+                            <div
+                              className="category-dots"
+                              aria-label={`${count} of 4 categories entered`}
+                            >
+                              {Array.from({ length: 4 }, (_, i) => (
+                                <i
+                                  className={i < count ? "filled" : ""}
+                                  key={i}
+                                />
+                              ))}
                             </div>
-                            <span>{count}/4</span>
                           </div>
                         </td>
                         <td className="num">
                           <b>{fmtPct(r?.total)}</b>
                         </td>
                         <td>
-                          <span
-                            className={`badge ${count === 4 ? "green" : count ? "amber" : "neutral"}`}
-                          >
-                            {count === 4
-                              ? "Complete"
-                              : count
-                                ? "In progress"
-                                : "Not started"}
-                          </span>
-                        </td>
-                        <td>
                           <Link
+                            className="text-link"
                             href={`/enter?office=${encodeURIComponent(o.code)}`}
                             aria-label={`Enter scores for ${o.name}`}
                           >
-                            <Icon name="arrow" size={15} />
+                            Enter scores
+                            <Icon name="arrow" size={14} />
                           </Link>
                         </td>
                       </tr>
@@ -424,22 +271,21 @@ export default function OverviewPage() {
               </tbody>
             </table>
           </div>
-          {filtered.length === 0 && (
+          {!filtered.length && (
             <div className="empty-state">
-              <Icon name="building" size={28} />
-              <b>{query ? "No matching offices" : "No offices to show yet"}</b>
+              <b>{query ? "No matching offices" : "No offices to show"}</b>
               {query
                 ? "Try another office name or focal person."
-                : "Offices will appear here once your program data is connected."}
+                : "Your offices will appear when program data is connected."}
             </div>
           )}
           <div className="table-foot">
             <span>
               {filtered.length
-                ? `Showing ${(currentPage - 1) * 6 + 1}–${Math.min(currentPage * 6, filtered.length)} of ${filtered.length} offices`
+                ? `${(currentPage - 1) * 6 + 1}–${Math.min(currentPage * 6, filtered.length)} of ${filtered.length} offices`
                 : "0 offices"}
             </span>
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div className="pagination">
               <button
                 className="btn small secondary"
                 disabled={currentPage === 1}
@@ -461,65 +307,79 @@ export default function OverviewPage() {
           </div>
         </section>
       )}
+      {preferences.showProgress && (
+        <details className="section overview-guide">
+          <summary>
+            <Icon name="help" size={18} />
+            <span>How does the program work?</span>
+            <Icon name="down" size={15} />
+          </summary>
+          <ol>
+            <li>
+              <Link href="/enter">Enter monthly scores</Link>
+              <p>
+                Record action plans, forms and visitors, overall ratings, and
+                submission dates. {started} offices have started.
+              </p>
+            </li>
+            <li>
+              <Link href="/rankings">Review office rankings</Link>
+              <p>
+                Offices with all four categories are ranked within their track.
+                The top five proceed to validation.
+              </p>
+            </li>
+            <li>
+              <Link href="/scores">Enter validator ratings</Link>
+              <p>
+                Validators rate each qualifying office and its focal person.{" "}
+                {rated} of {expectedRatings} ratings are complete.
+              </p>
+            </li>
+            <li>
+              <Link href="/finals">View final results</Link>
+              <p>
+                Final scores combine the initial evaluation with validator
+                ratings.
+              </p>
+            </li>
+          </ol>
+        </details>
+      )}
       {preferences.showChecks && (
-        <section className="section">
-          <div className="section-head">
-            <h3>Program data checks</h3>
-            <p>Calculated from your saved data</p>
-          </div>
+        <details className="section overview-guide">
+          <summary>
+            <Icon name="check" size={18} />
+            <span>Program data checks</span>
+            <Icon name="down" size={15} />
+          </summary>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
                   <th>Check</th>
                   <th>Result</th>
-                  <th>What it means</th>
+                  <th>Explanation</th>
                 </tr>
               </thead>
               <tbody>
                 {snap.checks.map((c) => (
                   <tr key={c.label}>
                     <td>{c.label}</td>
-                    <td>
-                      <b>{c.result}</b>
-                    </td>
+                    <td>{c.result}</td>
                     <td>{c.meaning}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {!snap.checks.length && (
-            <div className="empty-state">
-              Checks will appear when program data is available.
-            </div>
-          )}
-        </section>
+        </details>
       )}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          fontSize: 10,
-          color: "var(--muted)",
-          marginTop: 20,
-        }}
-      >
-        <span>
-          <span
-            style={{
-              color: snap.connected ? "var(--accent)" : "var(--muted)",
-              marginRight: 6,
-            }}
-          >
-            ●
-          </span>
-          {snap.connected
-            ? "Connected to your program database"
-            : "Database setup needed"}
-        </span>
-        <span>{freshnessText(lastSynced)} · Updates automatically</span>
-      </div>
+      <p className="sync-note">
+        <span className={snap.connected ? "connected-dot" : ""} />
+        {snap.connected ? "Connected" : "Database setup needed"} ·{" "}
+        {freshnessText(lastSynced)}
+      </p>
     </>
   );
 }

@@ -12,6 +12,7 @@ export default function OfficesPage() {
   const { snap, loading, error, refresh, setSaving } = useSnapshot();
   const [query, setQuery] = useState("");
   const [track, setTrack] = useState("All offices");
+  const [page, setPage] = useState(1);
   const [drafts, setDrafts] = useState<
     Record<string, { focal: string; focalPosition: string }>
   >({});
@@ -79,8 +80,8 @@ export default function OfficesPage() {
     <>
       <PageHead
         kicker="Manage your team"
-        title="Offices & people"
-        description="The right people, in the right place. Update focal persons and their positions here."
+        title="Offices & focal persons"
+        description="Edit the focal person and position assigned to each office, then save your changes."
         right={
           <span className="badge green">{snap.offices.length} offices</span>
         }
@@ -89,13 +90,6 @@ export default function OfficesPage() {
         <NotConnected missingEnv={snap.missingEnv} />
       ) : (
         <>
-          <div className="settings-help">
-            <b>Keeping your team up to date is simple.</b>
-            <p>
-              Edit a name or position below, then save your changes. Updates
-              appear in monthly entry and final results.
-            </p>
-          </div>
           <section className="section">
             <div className="toolbar">
               <div className="segmented">
@@ -104,7 +98,10 @@ export default function OfficesPage() {
                     key={t}
                     className={track === t ? "selected" : ""}
                     aria-pressed={track === t}
-                    onClick={() => setTrack(t)}
+                    onClick={() => {
+                      setTrack(t);
+                      setPage(1);
+                    }}
                   >
                     {t}
                   </button>
@@ -117,7 +114,10 @@ export default function OfficesPage() {
                   placeholder="Search offices or people…"
                   aria-label="Search offices or people"
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setPage(1);
+                  }}
                 />
               </div>
             </div>
@@ -132,7 +132,7 @@ export default function OfficesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {offices.map((o) => {
+                  {offices.slice((page - 1) * 6, page * 6).map((o) => {
                     const d = drafts[o.code] || {
                       focal: o.focal,
                       focalPosition: o.focalPosition,
@@ -204,8 +204,30 @@ export default function OfficesPage() {
               <div className="empty-state">No offices match your search.</div>
             )}
             <div className="table-foot">
-              <span>{offices.length} offices shown</span>
-              <span>Changes are saved only when you select Save changes.</span>
+              <span>
+                {offices.length
+                  ? `${(page - 1) * 6 + 1}–${Math.min(page * 6, offices.length)} of ${offices.length} offices`
+                  : "0 offices"}
+              </span>
+              <div className="pagination">
+                <button
+                  className="btn small secondary"
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  Previous
+                </button>
+                <span>
+                  {page} / {Math.max(1, Math.ceil(offices.length / 6))}
+                </span>
+                <button
+                  className="btn small secondary"
+                  disabled={page >= Math.ceil(offices.length / 6)}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </section>
           {message && (

@@ -6,20 +6,20 @@ import Icon from "./Icon";
 import { usePreferences } from "./Preferences";
 const groups = [
   {
-    label: "WORKSPACE",
+    label: "PROGRAM",
     links: [
       { href: "/", label: "Overview", icon: "grid" },
-      { href: "/enter", label: "Monthly entry", icon: "edit" },
-      { href: "/rankings", label: "Rankings & top 5", icon: "chart" },
-      { href: "/scores", label: "Validation", icon: "check" },
+      { href: "/enter", label: "Enter monthly scores", icon: "edit" },
+      { href: "/rankings", label: "Office rankings", icon: "chart" },
+      { href: "/scores", label: "Validator ratings", icon: "check" },
       { href: "/finals", label: "Final results", icon: "trophy" },
     ],
   },
   {
-    label: "MANAGE",
+    label: "REFERENCE & SETTINGS",
     links: [
-      { href: "/offices", label: "Offices & people", icon: "people" },
-      { href: "/calendar", label: "Working days", icon: "calendar" },
+      { href: "/offices", label: "Offices & focal persons", icon: "people" },
+      { href: "/calendar", label: "Working-day calendar", icon: "calendar" },
       { href: "/prizes", label: "Prizes", icon: "gift" },
       { href: "/settings", label: "Program settings", icon: "settings" },
     ],
@@ -39,16 +39,11 @@ export function TopBar() {
         <b>{current?.label || "Sign in"}</b>
       </div>
       <div className="topbar-actions">
-        <span className="year-label">
-          <Icon name="calendar" size={15} /> 2026 Program
-        </span>
+        <span className="year-label">2026</span>
         <button className="btn small secondary" onClick={openCustomize}>
           <Icon name="settings" size={16} />
           <span>Customize</span>
         </button>
-        <span className="avatar" title="Program administrator">
-          PA
-        </span>
       </div>
     </header>
   );
@@ -106,21 +101,11 @@ export default function Nav() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="sidebar-note">
-            <span className="note-icon">
-              <Icon name="leaf" size={22} />
-            </span>
-            <b>Better service. Together.</b>
-            <p>Recognizing the people behind exceptional public service.</p>
-            <Link href="/enter" onClick={() => setExpanded(false)}>
-              Let’s make progress <Icon name="arrow" size={15} />
-            </Link>
-          </div>
           <div className="sidebar-footer">
-            <span className="avatar small">PG</span>
+            <Icon name="building" size={17} />
             <div>
-              <b>PGLU workspace</b>
-              <span>Customer feedback · 2026</span>
+              <b>La Union</b>
+              <span>Customer Feedback Program · 2026</span>
             </div>
           </div>
         </div>

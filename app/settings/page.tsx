@@ -76,7 +76,22 @@ const ALL_FIELDS = [
 ];
 const GROUPS: { num: string; title: string; fields: Field[] }[] = [
   { num: "01", title: "Validators — who rates the top 5", fields: NAME_FIELDS },
-  { num: "02", title: "Initial evaluation weights", fields: WEIGHT_FIELDS },
+  {
+    num: "02-fl",
+    title: "Frontline evaluation weights",
+    fields: WEIGHT_FIELDS.slice(0, 4).map((f) => ({
+      ...f,
+      label: f.label.replace("Frontline — ", ""),
+    })),
+  },
+  {
+    num: "02-nfl",
+    title: "Non-frontline evaluation weights",
+    fields: WEIGHT_FIELDS.slice(4).map((f) => ({
+      ...f,
+      label: f.label.replace("Non-frontline — ", ""),
+    })),
+  },
   { num: "03", title: "Final mix", fields: MIX_FIELDS },
   { num: "04", title: "Rules", fields: RULE_FIELDS },
   {
@@ -148,7 +163,7 @@ export default function SettingsPage() {
     tab === "Validators"
       ? GROUPS.filter((g) => g.num === "01")
       : tab === "Evaluation weights"
-        ? GROUPS.filter((g) => ["02", "03", "06"].includes(g.num))
+        ? GROUPS.filter((g) => ["02-fl", "02-nfl", "03", "06"].includes(g.num))
         : GROUPS.filter((g) => ["04", "05"].includes(g.num));
   async function save() {
     const numeric = ALL_FIELDS.filter((f) => f.kind !== "text");
@@ -284,53 +299,67 @@ export default function SettingsPage() {
               </button>
             ))}
           </div>
-          {groups.map((g) => (
-            <section className="section" key={g.num}>
-              <SectionHead num={g.num} title={g.title} />
-              <div className="section-body">
-                <div className="field-row">
-                  {g.fields.map((f) => (
-                    <div key={f.key}>
-                      <label htmlFor={f.key}>{f.label}</label>
-                      <input
-                        id={f.key}
-                        disabled={
-                          busy || ["validatorScale", "gprMax"].includes(f.key)
-                        }
-                        type={f.kind === "text" ? "text" : "number"}
-                        min={f.kind === "text" ? undefined : 0}
-                        max={f.kind === "pct" ? 100 : undefined}
-                        step={f.step || "any"}
-                        value={values[f.key] ?? ""}
-                        onChange={(e) => {
-                          setValues((p) => ({ ...p, [f.key]: e.target.value }));
-                          setMsg(null);
-                        }}
-                      />
+          <div
+            className={
+              tab === "Evaluation weights" ? "settings-weight-grid" : undefined
+            }
+          >
+            {groups.map((g) => (
+              <section
+                className={`section ${g.num.startsWith("02-") ? "weight-track-card" : ""}`}
+                key={g.num}
+                aria-label={g.title}
+              >
+                <SectionHead num={g.num} title={g.title} />
+                <div className="section-body">
+                  <div className="field-row">
+                    {g.fields.map((f) => (
+                      <div key={f.key}>
+                        <label htmlFor={f.key}>{f.label}</label>
+                        <input
+                          id={f.key}
+                          disabled={
+                            busy || ["validatorScale", "gprMax"].includes(f.key)
+                          }
+                          type={f.kind === "text" ? "text" : "number"}
+                          min={f.kind === "text" ? undefined : 0}
+                          max={f.kind === "pct" ? 100 : undefined}
+                          step={f.step || "any"}
+                          value={values[f.key] ?? ""}
+                          onChange={(e) => {
+                            setValues((p) => ({
+                              ...p,
+                              [f.key]: e.target.value,
+                            }));
+                            setMsg(null);
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {g.num.startsWith("02-") && (
+                    <div className="weight-track-total">
+                      <span>Total weight</span>
+                      <strong>
+                        {["Res", "Coll", "Gpr", "Time"].reduce(
+                          (sum, key) =>
+                            sum +
+                            Number(
+                              values[
+                                (g.num === "02-fl" ? "fl" : "nfl") + key
+                              ] || 0,
+                            ),
+                          0,
+                        )}
+                        %
+                      </strong>
+                      <small>Must total 100% for this track.</small>
                     </div>
-                  ))}
+                  )}
                 </div>
-                {g.num === "02" && (
-                  <p
-                    className="muted"
-                    style={{ fontSize: 11, margin: "18px 0 0" }}
-                  >
-                    Each track must total 100%. Frontline:{" "}
-                    {["Res", "Coll", "Gpr", "Time"].reduce(
-                      (s, k) => s + Number(values["fl" + k] || 0),
-                      0,
-                    )}
-                    % · Non-frontline:{" "}
-                    {["Res", "Coll", "Gpr", "Time"].reduce(
-                      (s, k) => s + Number(values["nfl" + k] || 0),
-                      0,
-                    )}
-                    %
-                  </p>
-                )}
-              </div>
-            </section>
-          ))}
+              </section>
+            ))}
+          </div>
           {msg && (
             <div
               className={`notice ${msg.ok ? "ok" : "error"}`}

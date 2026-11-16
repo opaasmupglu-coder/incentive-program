@@ -20,6 +20,7 @@ export default function ScoresPage() {
   const [selectedOffice, setSelectedOffice] = useState("");
   const [selectedValidator, setSelectedValidator] = useState("");
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [ratingKind, setRatingKind] = useState<"office" | "focal">("office");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(
     null,
@@ -124,8 +125,8 @@ export default function ScoresPage() {
     <>
       <PageHead
         kicker="Final evaluation"
-        title="Thoughtful ratings. Fair recognition."
-        description="One office, one validator at a time. Score each item from 1 to 5; totals update as you go."
+        title="Validator ratings"
+        description="Choose an office and validator, then rate the office or its focal person."
         right={
           <Link className="btn secondary" href="/finals">
             View final results <Icon name="arrow" size={14} />
@@ -138,7 +139,7 @@ export default function ScoresPage() {
         <>
           <section className="section">
             <div className="section-head">
-              <h3>Your evaluation workspace</h3>
+              <h3>Choose who you’re rating</h3>
               <p>Drafts stay here when you switch between offices</p>
             </div>
             <div className="section-body">
@@ -226,6 +227,28 @@ export default function ScoresPage() {
                   {filled}/9 items rated
                 </span>
               </div>
+              <div className="tabs" aria-label="Rating category">
+                <button
+                  className={ratingKind === "office" ? "selected" : ""}
+                  aria-pressed={ratingKind === "office"}
+                  onClick={() => setRatingKind("office")}
+                >
+                  Office ratings{" "}
+                  <span className="rating-tab-count">
+                    {draft.office.filter((v) => v !== null).length}/4
+                  </span>
+                </button>
+                <button
+                  className={ratingKind === "focal" ? "selected" : ""}
+                  aria-pressed={ratingKind === "focal"}
+                  onClick={() => setRatingKind("focal")}
+                >
+                  Focal-person ratings{" "}
+                  <span className="rating-tab-count">
+                    {draft.focal.filter((v) => v !== null).length}/5
+                  </span>
+                </button>
+              </div>
               <div className="rating-panels">
                 {[
                   {
@@ -242,57 +265,73 @@ export default function ScoresPage() {
                     items: FOCAL_ITEMS,
                     total: liveFocal,
                   },
-                ].map((group) => (
-                  <section className="section" key={group.kind}>
-                    <div className="section-head">
-                      <Icon name={group.icon} size={17} />
-                      <h3>{group.title}</h3>
-                      <p>{fmtPct(group.total)} weighted score</p>
-                    </div>
-                    <div className="section-body">
-                      <div className="rating-legend">
-                        <span>1 · Lowest</span>
-                        <span>5 · Highest</span>
+                ]
+                  .filter((group) => group.kind === ratingKind)
+                  .map((group) => (
+                    <section className="section" key={group.kind}>
+                      <div className="section-head">
+                        <Icon name={group.icon} size={17} />
+                        <h3>{group.title}</h3>
+                        <p>{fmtPct(group.total)} weighted score</p>
                       </div>
-                      {group.items.map((item, i) => (
-                        <fieldset className="rating-item" key={item}>
-                          <legend>{item}</legend>
-                          <div className="rating-buttons">
-                            {[1, 2, 3, 4, 5].map((n) => (
+                      <div className="section-body">
+                        <div className="rating-legend">
+                          <span>1 · Lowest</span>
+                          <span>5 · Highest</span>
+                        </div>
+                        {group.items.map((item, i) => (
+                          <fieldset className="rating-item" key={item}>
+                            <legend>{item}</legend>
+                            <div className="rating-buttons">
+                              {[1, 2, 3, 4, 5].map((n) => (
+                                <button
+                                  key={n}
+                                  disabled={busy}
+                                  aria-label={`${group.kind === "office" ? "Office" : "Focal person"} ${item}: ${n}`}
+                                  aria-pressed={draft[group.kind][i] === n}
+                                  className={
+                                    draft[group.kind][i] === n ? "selected" : ""
+                                  }
+                                  onClick={() => setScore(group.kind, i, n)}
+                                >
+                                  {n}
+                                </button>
+                              ))}
                               <button
-                                key={n}
-                                disabled={busy}
-                                aria-label={`${group.kind === "office" ? "Office" : "Focal person"} ${item}: ${n}`}
-                                aria-pressed={draft[group.kind][i] === n}
-                                className={
-                                  draft[group.kind][i] === n ? "selected" : ""
-                                }
-                                onClick={() => setScore(group.kind, i, n)}
+                                className="clear-score"
+                                disabled={busy || draft[group.kind][i] === null}
+                                aria-label={`Clear ${group.kind} ${item} score`}
+                                onClick={() => setScore(group.kind, i, null)}
                               >
-                                {n}
+                                <Icon name="close" size={13} />
                               </button>
-                            ))}
-                            <button
-                              className="clear-score"
-                              disabled={busy || draft[group.kind][i] === null}
-                              aria-label={`Clear ${group.kind} ${item} score`}
-                              onClick={() => setScore(group.kind, i, null)}
-                            >
-                              <Icon name="close" size={13} />
-                            </button>
-                          </div>
-                        </fieldset>
-                      ))}
-                      <div className="tip">
-                        <Icon name="help" size={16} />
-                        <p>
-                          Unrated items stay blank. They count as missing, never
-                          as zero.
-                        </p>
+                            </div>
+                          </fieldset>
+                        ))}
+                        <div className="tip">
+                          <Icon name="help" size={16} />
+                          <p>
+                            Unrated items stay blank. They count as missing,
+                            never as zero.
+                          </p>
+                        </div>
+                        <div className="rating-next">
+                          <button
+                            className="btn secondary small"
+                            onClick={() =>
+                              setRatingKind(
+                                ratingKind === "office" ? "focal" : "office",
+                              )
+                            }
+                          >
+                            {ratingKind === "office"
+                              ? "Next: Focal-person ratings →"
+                              : "← Back to office ratings"}
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  </section>
-                ))}
+                    </section>
+                  ))}
               </div>
               {message && (
                 <div
@@ -317,11 +356,12 @@ export default function ScoresPage() {
                   {busy ? "Saving…" : "Save validator scores"}
                 </button>
               </div>
-              <section className="section">
-                <div className="section-head">
-                  <h3>Validation progress · {track}</h3>
-                  <p>Office and focal ratings are tracked separately</p>
-                </div>
+              <details className="section overview-guide">
+                <summary>
+                  <Icon name="check" size={17} />
+                  <span>View validation progress · {track}</span>
+                  <Icon name="down" size={15} />
+                </summary>
                 <div className="table-wrap">
                   <table>
                     <thead>
@@ -372,7 +412,7 @@ export default function ScoresPage() {
                     </tbody>
                   </table>
                 </div>
-              </section>
+              </details>
             </>
           )}
         </>

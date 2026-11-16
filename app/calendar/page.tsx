@@ -30,8 +30,8 @@ export default function CalendarPage() {
     <>
       <PageHead
         kicker="Program calendar"
-        title="Every working day counts"
-        description="Your official 2026 PGLU calendar, with local holidays, work suspensions, and four-day weeks."
+        title="Working-day calendar"
+        description="Check the 2026 working days or calculate the time between two dates."
         right={
           <a
             className="btn secondary"

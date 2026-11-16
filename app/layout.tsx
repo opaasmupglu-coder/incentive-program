@@ -1,7 +1,18 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import Nav, { TopBar } from "@/components/Nav";
 import PreferencesProvider from "@/components/Preferences";
 import "./globals.css";
+const inter = localFont({
+  src: [
+    { path: "../public/fonts/inter-400.ttf", weight: "400", style: "normal" },
+    { path: "../public/fonts/inter-500.ttf", weight: "500", style: "normal" },
+    { path: "../public/fonts/inter-600.ttf", weight: "600", style: "normal" },
+    { path: "../public/fonts/inter-700.ttf", weight: "700", style: "normal" },
+  ],
+  variable: "--font-ui",
+  display: "swap",
+});
 export const metadata: Metadata = {
   title: "Feedback — 2026 Incentive Program",
   description:
@@ -13,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={inter.variable}>
       <body>
         <PreferencesProvider>
           <a href="#main-content" className="skip-link">

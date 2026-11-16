@@ -33,11 +33,19 @@ export async function POST(req: NextRequest) {
     if (
       [...numbers, ...secondNumbers].some(
         (n) =>
-          n !== null && (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)),
+          n !== null &&
+          (!Number.isFinite(n) ||
+            n < 0 ||
+            (criterion !== "gpr" && !Number.isInteger(n))),
       )
     )
       return NextResponse.json(
-        { error: "Enter non-negative whole numbers." },
+        {
+          error:
+            criterion === "gpr"
+              ? "Enter a rating between 0 and 100."
+              : "Enter non-negative whole numbers.",
+        },
         { status: 400 },
       );
     if (criterion === "gpr" && numbers.some((n) => n !== null && n > 100))

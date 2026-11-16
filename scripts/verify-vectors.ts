@@ -92,10 +92,25 @@ if (resolutionRate(90, 0) !== null) {
   console.error("FAIL Resolution blank when plans=0");
 } else console.log("ok   Resolution blank when plans=0");
 check("Collection 0 when forms < min", collectionRate(10, 50, 384.16, 20), 0);
-if (collectionRate(40, 1, 384.16, 20) !== null) {
+check(
+  "Collection caps at 100% with one visitor",
+  collectionRate(40, 1, 384.16, 20),
+  1,
+);
+check(
+  "Recorded zero forms and visitors follow minimum branch",
+  collectionRate(0, 0, 384.16, 20),
+  0,
+);
+check(
+  "NFL recorded zero forms and visitors follow minimum branch",
+  collectionRate(0, 0, 384.16, 10),
+  0,
+);
+if (collectionRate(40, 0, 384.16, 20) !== null) {
   failures++;
-  console.error("FAIL Collection blank when clients<=1");
-} else console.log("ok   Collection blank when clients<=1");
+  console.error("FAIL zero denominator should remain unavailable");
+}
 check("Timeliness 2 days", timelinessScore(2, [1, 0.8, 0.6, 0.4, 0.2, 0]), 1.0);
 check(
   "Timeliness 12 days",

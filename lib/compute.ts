@@ -36,8 +36,10 @@ export function collectionRate(
   sampleConstant: number,
   minForms: number
 ): number | null {
-  if (forms === null || clients === null || clients <= 1) return null;
+  if (forms === null || clients === null) return null;
   if (forms < minForms) return 0;
+  // The sheet checks the minimum first, including recorded zero-visitor months.
+  if (clients <= 0) return null;
   const rate = forms / (clients * sampleConstant / ((clients - 1) + sampleConstant));
   return Math.min(1, rate);
 }

@@ -1,278 +1,273 @@
 "use client";
-import { memo, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
 import Icon from "@/components/Icon";
 import { downloadCsv } from "@/lib/export";
-import { fmtPct, freshnessText, useSnapshot } from "@/components/useSnapshot";
+import { initialCriteria, initialPreview } from "@/lib/initial-preview";
+import { fmtPct, useSnapshot } from "@/components/useSnapshot";
 import {
   ErrorState,
   LoadingState,
   NotConnected,
   PageHead,
-  SectionHead,
 } from "@/components/ui";
-import type { InitialRow } from "@/lib/types";
-
-const sortRows = (rows: InitialRow[]) =>
-  [...rows].sort((a, b) => {
-    if (a.total === null && b.total === null) return 0;
-    if (a.total === null) return 1;
-    if (b.total === null) return -1;
-    return b.total - a.total;
-  });
-
-const RankingTable = memo(function RankingTable({
-  rows,
-  top5,
-}: {
-  rows: InitialRow[];
-  top5: Set<string>;
-}) {
-  if (rows.length === 0) {
-    return <p className="muted">No offices in this track yet.</p>;
-  }
-  return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th className="num">Rank</th>
-            <th>Office</th>
-            <th className="num">Total</th>
-            <th className="num">Resolution</th>
-            <th className="num">Collection</th>
-            <th className="num">GPR</th>
-            <th className="num">Timeliness</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => {
-            const complete = r.status.startsWith("✓");
-            const isTop5 = top5.has(r.code);
-            return (
-              <tr key={r.code} className={isTop5 ? "top5-row" : undefined}>
-                <td className="num">
-                  {r.rank !== null ? (
-                    <span className="rank-num">
-                      <span className="hash">#</span>
-                      {r.rank}
-                    </span>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                <td>
-                  <b>{r.name}</b>
-                  {isTop5 && (
-                    <>
-                      {" "}
-                      <span className="top5-mark">Top 5</span>
-                    </>
-                  )}
-                </td>
-                <td className="num">
-                  <b>{r.total !== null ? fmtPct(r.total) : "—"}</b>
-                </td>
-                <td className="num">
-                  {fmtPct(r.resolution)}{" "}
-                  <span className="sub">· {r.resolutionMonths ?? "—"} mo</span>
-                </td>
-                <td className="num">
-                  {fmtPct(r.collection)}{" "}
-                  <span className="sub">· {r.collectionMonths ?? "—"} mo</span>
-                </td>
-                <td className="num">
-                  {r.gpr !== null ? r.gpr.toFixed(1) : "—"}{" "}
-                  <span className="sub">· {r.gprMonths ?? "—"} mo</span>
-                </td>
-                <td className="num">
-                  {r.timeliness !== null ? r.timeliness.toFixed(2) : "—"}{" "}
-                  <span className="sub">· {r.timelinessMonths ?? "—"} mo</span>
-                </td>
-                <td>
-                  {complete ? (
-                    <span className="status-done">Complete</span>
-                  ) : (
-                    <span className="status-wait">{r.status}</span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-});
 
 export default function RankingsPage() {
-  const { snap, loading, error, lastSynced } = useSnapshot();
+  const { snap, loading, error } = useSnapshot();
   const [track, setTrack] = useState("Frontline");
   const [query, setQuery] = useState("");
-
-  const sortedFL = useMemo(
-    () => (snap ? sortRows(snap.initialFL) : []),
-    [snap],
-  );
-  const sortedNFL = useMemo(
-    () => (snap ? sortRows(snap.initialNFL) : []),
-    [snap],
-  );
-  const top5FL = useMemo(
-    () =>
-      new Set(
-        snap
-          ? snap.validatorAvg
-              .slice(0, 5)
-              .map((r) => r.code)
-              .filter(Boolean)
-          : [],
-      ),
-    [snap],
-  );
-  const top5NFL = useMemo(
-    () =>
-      new Set(
-        snap
-          ? snap.validatorAvg
-              .slice(5, 10)
-              .map((r) => r.code)
-              .filter(Boolean)
-          : [],
-      ),
-    [snap],
-  );
-
+  const previews = useMemo(() => {
+    const flWeights = snap?.settings?.flWeights || [0.35, 0.3, 0.2, 0.15];
+    const nflWeights = snap?.settings?.nflWeights || [0.3, 0.2, 0.35, 0.15];
+    const scale = snap?.settings?.gprMax || 100;
+    return {
+      frontline: initialPreview(snap?.initialFL || [], flWeights, scale),
+      nonFrontline: initialPreview(snap?.initialNFL || [], nflWeights, scale),
+    };
+  }, [snap]);
   if (loading) return <LoadingState />;
   if (error) return <ErrorState error={error} />;
-  if (!snap) return <LoadingState what="No data yet" />;
-  if (!snap.connected) {
-    return (
-      <>
-        <PageHead
-          kicker="Section 03"
-          title="Rankings & Top 5"
-          description="Initial results for every office. The top 5 per track go to validation."
-          right={<span className="freshness">{freshnessText(lastSynced)}</span>}
-        />
-        <NotConnected missingEnv={snap.missingEnv} />
-      </>
+  if (!snap) return <LoadingState />;
+  const weights = (track === "Frontline"
+    ? snap.settings?.flWeights
+    : snap.settings?.nflWeights) || [0, 0, 0, 0];
+  const rows =
+    track === "Frontline" ? previews.frontline : previews.nonFrontline;
+  const filtered = rows.filter((r) =>
+    `${r.name} ${r.code}`.toLowerCase().includes(query.toLowerCase()),
+  );
+  const provisional = rows.some((r) => r.provisional);
+  const gprScale = snap.settings?.gprMax || 100;
+  const completed = rows.filter((r) => r.total !== null).length;
+  const pctNumber = (n: number | null) =>
+    n === null ? null : Math.round(n * 1000000) / 10000;
+  function exportRankings() {
+    const data = [
+      {
+        track: "Frontline",
+        rows: previews.frontline,
+        weights: snap?.settings?.flWeights || [0, 0, 0, 0],
+      },
+      {
+        track: "Non-frontline",
+        rows: previews.nonFrontline,
+        weights: snap?.settings?.nflWeights || [0, 0, 0, 0],
+      },
+    ].flatMap((group) =>
+      group.rows.map((r) => {
+        const criteria = initialCriteria(r, group.weights, gprScale);
+        return [
+          group.track,
+          r.displayRank,
+          r.name,
+          pctNumber(r.displayTotal),
+          r.provisional ? "Provisional" : "Complete",
+          ...criteria.flatMap((c) => [
+            pctNumber(c.weighted),
+            pctNumber(c.actual),
+          ]),
+          r.entered,
+          r.previewTop5 ? "Yes" : "No",
+        ];
+      }),
     );
+    downloadCsv("initial-rankings-2026.csv", [
+      [
+        "Track",
+        "Preview rank",
+        "Office",
+        "Running initial total (%)",
+        "Status",
+        "Resolution weighted (%)",
+        "Resolution actual (%)",
+        "Collection weighted (%)",
+        "Collection actual (%)",
+        "GPR weighted (%)",
+        "GPR actual (%)",
+        "Timeliness weighted (%)",
+        "Timeliness actual (%)",
+        "Criteria entered",
+        "Preview top 5",
+      ],
+      ...data,
+    ]);
   }
-
   return (
     <>
       <PageHead
-        kicker="Section 03"
-        title="Rankings & Top 5"
-        description="Initial results for every office. The top 5 per track go to validation."
+        kicker="Initial evaluation"
+        title="Initial rankings & Top 5"
+        description="See running initial scores as monthly data comes in. Totals with missing criteria are provisional."
         right={
           <button
             className="btn secondary"
-            onClick={() =>
-              downloadCsv("initial-rankings-2026.csv", [
-                [
-                  "Track",
-                  "Rank",
-                  "Office",
-                  "Initial score",
-                  "Resolution",
-                  "Collection",
-                  "GPR",
-                  "Timeliness",
-                  "Status",
-                ],
-                ...[
-                  ...sortedFL.map((r) => ({ ...r, track: "Frontline" })),
-                  ...sortedNFL.map((r) => ({ ...r, track: "Non-frontline" })),
-                ].map((r) => [
-                  r.track,
-                  r.rank,
-                  r.name,
-                  r.total,
-                  r.resolution,
-                  r.collection,
-                  r.gpr,
-                  r.timeliness,
-                  r.status,
-                ]),
-              ])
-            }
+            onClick={exportRankings}
+            disabled={!snap.connected}
           >
             <Icon name="download" size={15} />
             Export rankings
           </button>
         }
       />
-      <div
-        className="toolbar"
-        style={{
-          background: "white",
-          border: "1px solid var(--line)",
-          borderRadius: 9,
-        }}
-      >
-        <div className="segmented">
-          {["Frontline", "Non-frontline"].map((t) => (
-            <button
-              key={t}
-              aria-pressed={track === t}
-              className={track === t ? "selected" : ""}
-              onClick={() => setTrack(t)}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-        <div className="search-field">
-          <Icon name="search" size={15} />
-          <input
-            type="text"
-            aria-label="Search rankings"
-            placeholder="Find an office…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-      </div>
-      {track === "Frontline" && (
-        <section className="section" aria-label="Frontline rankings">
-          <SectionHead
-            num="01"
-            title="Frontline rankings"
-            note="Highlighted offices qualify for validation"
-          />
-          <div className="section-body">
-            <RankingTable
-              rows={sortedFL.filter((r) =>
-                `${r.name} ${r.code}`
-                  .toLowerCase()
-                  .includes(query.toLowerCase()),
-              )}
-              top5={top5FL}
-            />
+      {!snap.connected ? (
+        <NotConnected missingEnv={snap.missingEnv} />
+      ) : (
+        <>
+          <div className="toolbar rankings-toolbar">
+            <div className="segmented" aria-label="Ranking track">
+              {["Frontline", "Non-frontline"].map((t) => (
+                <button
+                  key={t}
+                  aria-pressed={track === t}
+                  className={track === t ? "selected" : ""}
+                  onClick={() => setTrack(t)}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+            <div className="search-field">
+              <Icon name="search" size={16} />
+              <input
+                type="text"
+                aria-label="Search rankings"
+                placeholder="Find an office"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
           </div>
-        </section>
-      )}
-
-      {track === "Non-frontline" && (
-        <section className="section" aria-label="Non-frontline rankings">
-          <SectionHead
-            num="02"
-            title="Non-frontline rankings"
-            note="Highlighted offices qualify for validation"
-          />
-          <div className="section-body">
-            <RankingTable
-              rows={sortedNFL.filter((r) =>
-                `${r.name} ${r.code}`
-                  .toLowerCase()
-                  .includes(query.toLowerCase()),
-              )}
-              top5={top5NFL}
-            />
-          </div>
-        </section>
+          <p className="rankings-explanation">
+            <strong>How to read the scores:</strong> weighted score{" "}
+            <span className="actual-percentage">(actual average)</span>. Missing
+            criteria stay blank and are omitted from the running total.
+          </p>
+          <section
+            className="section ranking-results"
+            aria-label={`${track} rankings`}
+          >
+            <div className="section-head">
+              <h3>{track} initial rankings</h3>
+              <p>
+                {completed} of {rows.length} offices have all four criteria
+              </p>
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th className="num">Rank</th>
+                    <th>Office</th>
+                    <th className="num">Initial total</th>
+                    {["Resolution", "Collection", "GPR", "Timeliness"].map(
+                      (name, i) => (
+                        <th key={name} className="num">
+                          {name}
+                          <span className="criterion-weight">
+                            {fmtPct(weights[i], 0)} weight
+                          </span>
+                        </th>
+                      ),
+                    )}
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((r) => {
+                    const criteria = initialCriteria(r, weights, gprScale);
+                    const months = [
+                      r.resolutionMonths,
+                      r.collectionMonths,
+                      r.gprMonths,
+                      r.timelinessMonths,
+                    ];
+                    return (
+                      <tr
+                        key={r.code}
+                        className={r.previewTop5 ? "top5-row" : ""}
+                      >
+                        <td className="num">
+                          <span className="rank-num">
+                            {r.displayRank === null ? (
+                              "—"
+                            ) : (
+                              <>
+                                <span className="hash">#</span>
+                                {r.displayRank}
+                              </>
+                            )}
+                          </span>
+                        </td>
+                        <td>
+                          <b>{r.name}</b>
+                          {r.previewTop5 && (
+                            <span className="top5-mark">
+                              {provisional ? "Top 5 · preview" : "Top 5"}
+                            </span>
+                          )}
+                        </td>
+                        <td className="num running-total">
+                          <b>{fmtPct(r.displayTotal)}</b>
+                          {r.provisional && r.displayTotal !== null && (
+                            <span className="provisional-note">
+                              Provisional
+                            </span>
+                          )}
+                        </td>
+                        {criteria.map((criterion, i) => (
+                          <td
+                            key={i}
+                            className="num criterion-result"
+                            title={`Based on ${months[i] ?? 0} reporting months`}
+                          >
+                            {criterion.actual === null ? (
+                              "—"
+                            ) : (
+                              <>
+                                <b>{fmtPct(criterion.weighted)}</b>{" "}
+                                <span className="actual-percentage">
+                                  ({fmtPct(criterion.actual)})
+                                </span>
+                              </>
+                            )}
+                          </td>
+                        ))}
+                        <td>
+                          <span
+                            className={`badge ${r.entered === 4 ? "green" : r.entered ? "amber" : "neutral"}`}
+                          >
+                            {r.entered === 4
+                              ? "Complete"
+                              : `${r.entered} of 4 criteria`}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {!filtered.length && (
+              <div className="empty-state">No offices match your search.</div>
+            )}
+            <div className="table-foot">
+              <span>{filtered.length} offices shown</span>
+              <span>
+                Highlighted: current {provisional ? "provisional " : ""}Top 5
+              </span>
+            </div>
+          </section>
+          {provisional && (
+            <div className="rankings-footnote">
+              <Icon name="help" size={17} />
+              <p>
+                This preview updates as you enter scores. An office still needs
+                all four criteria before it qualifies for validator ratings.{" "}
+                <Link href="/enter">Continue entering monthly scores →</Link>
+              </p>
+            </div>
+          )}
+        </>
       )}
     </>
   );

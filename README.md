@@ -8,12 +8,25 @@ workbook; monthly inputs and validator scores start empty.
 
 ## How it works
 
-The workspace has a responsive sidebar and a progress dashboard. Use **Monthly
-entry** to choose an office and criterion, enter January–October values, preview
-calculated rates, and save. Blank months mean no data and clear a previously
-saved month. **Validation** evaluates one top-five office and validator at a time,
-with separate office and focal-person ratings. Rankings and final results offer
-track filters and CSV exports.
+The workspace uses self-hosted Inter fonts, a compact sidebar, and a dashboard
+with one suggested next action. **Enter monthly scores** shows one office,
+reporting month, and category at a time. Month navigation keeps unsaved edits;
+an optional **View all months** summary lets you review and jump to another month.
+Save changes before switching office or category. Blank months mean no data and
+clear a previously saved month; zero remains an actual recorded value. Overall
+ratings accept percentages with decimals (for example, 95.63).
+
+**Validator ratings** separates office and focal-person questions into tabs and
+keeps the progress table collapsed until needed. Rankings and final results
+offer track filters and CSV exports. **Offices & focal persons** displays six
+offices per page and keeps edits when moving between pages.
+
+**Initial rankings & Top 5** shows running totals and provisional ranks while
+criteria are incomplete. Each criterion displays its weighted score followed by
+the actual average in parentheses. Missing criteria remain blank. Provisional
+totals and Top 5 are for display only; official qualification still requires
+all four criteria. Evaluation settings put Frontline and Non-frontline weights
+in separate cards, each with its own 100% total.
 
 **Offices & people** lets you search by office or person, edit focal names and
 positions, and save changed offices together. Focal-person names appear in the
@@ -109,7 +122,9 @@ Do not create a second Vercel project for this app.
 - Resolution rate = acted/plans (blank if either is blank or plans = 0).
 - Collection rate = min(1, forms / (clients × 384.16 / ((clients−1) + 384.16))),
   0 if forms < the track minimum (20 Frontline / 10 Non-frontline), blank if
-  forms/clients blank or clients ≤ 1.
+  forms/clients are missing. The minimum-forms check precedes denominator
+  validation, matching the FL and NFL sheet formulas: recorded 0 forms and
+  0 visitors yield 0, while qualifying forms with 0 visitors remain unavailable.
 - Timeliness score from days: ≤3 → 1.0, ≤5 → 0.8, ≤7 → 0.6, ≤10 → 0.4,
   ≤15 → 0.2, else 0.0. GPR rate = GPR / 100.
 - Per-office averages average the monthly rates, ignoring blank months.

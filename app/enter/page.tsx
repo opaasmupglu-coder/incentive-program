@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { MONTHS } from "@/lib/types";
 import { fmtPct, useSnapshot } from "@/components/useSnapshot";
@@ -18,31 +18,31 @@ type Criterion = "resolution" | "collection" | "gpr" | "timeliness";
 const criteria = [
   {
     key: "resolution" as const,
-    label: "Resolution",
+    label: "Action plans resolved",
     first: "Acted upon",
     second: "With action plans",
     hint: "How many feedback items were acted upon, out of those with action plans?",
   },
   {
     key: "collection" as const,
-    label: "Collection",
+    label: "Forms & visitors",
     first: "Forms collected",
-    second: "Total clients",
+    second: "Visitors / clients",
     hint: "Enter forms collected and total clients. The collection rate is calculated for you.",
   },
   {
     key: "gpr" as const,
-    label: "Performance rating",
-    first: "GPR (0–100)",
+    label: "Overall rating",
+    first: "Overall rating (%)",
     second: null,
-    hint: "Enter the office’s General Performance Rating, from 0 to 100.",
+    hint: "Enter the office’s General Average Rating as a percentage, for example 95.63.",
   },
   {
     key: "timeliness" as const,
-    label: "Timeliness",
+    label: "Submission dates",
     first: "Working days",
     second: null,
-    hint: "Choose release and received dates to count working days automatically. Or enter a day count; use 99 for an unsubmitted plan.",
+    hint: "Enter this office’s release and received dates. Working days and the timeliness score are calculated automatically.",
   },
 ];
 const blankDates = () =>
@@ -52,6 +52,8 @@ export default function EnterPage() {
   const [track, setTrack] = useState("Frontline");
   const [officeCode, setOfficeCode] = useState("");
   const [criterion, setCriterion] = useState<Criterion>("resolution");
+  const [month, setMonth] = useState(0);
+  const [manualDays, setManualDays] = useState(false);
   const [first, setFirst] = useState<string[]>(Array(10).fill(""));
   const [second, setSecond] = useState<string[]>(Array(10).fill(""));
   const [dates, setDates] = useState(blankDates);
@@ -69,10 +71,6 @@ export default function EnterPage() {
     loading: calendarLoading,
     loadedOffice,
   } = useCalendar(officeCode);
-  const offices = useMemo(
-    () => (snap?.offices || []).filter((o) => o.track === track),
-    [snap, track],
-  );
   const prefillKey = useRef("");
   const datesKey = useRef("");
   const initialSelection = useRef(false);
@@ -189,10 +187,18 @@ export default function EnterPage() {
       .filter((v) => v !== "")
       .map(Number);
     if (
-      values.some((v) => !Number.isFinite(v) || v < 0 || !Number.isInteger(v))
+      values.some(
+        (v) =>
+          !Number.isFinite(v) ||
+          v < 0 ||
+          (criterion !== "gpr" && !Number.isInteger(v)),
+      )
     ) {
       setMessage({
-        text: "Enter non-negative whole numbers for every value.",
+        text:
+          criterion === "gpr"
+            ? "Enter a rating between 0 and 100."
+            : "Enter non-negative whole numbers for every value.",
         ok: false,
       });
       return;
@@ -270,48 +276,19 @@ export default function EnterPage() {
     <>
       <PageHead
         kicker="Monthly evaluation"
-        title="A little progress, every month"
-        description="Choose an office, enter the numbers, and let us take care of the calculations."
-        right={
-          <Link className="btn secondary" href="/rankings">
-            View rankings <Icon name="arrow" size={14} />
-          </Link>
-        }
+        title="Enter monthly scores"
+        description="Select an office and reporting month, then choose what to update."
       />
       {!snap.connected ? (
         <NotConnected missingEnv={snap.missingEnv} />
       ) : (
         <>
-          <section className="section">
-            <SectionHead
-              num="01"
-              title="Choose your office"
-              note="January – October 2026"
-            />
+          <section
+            className="section entry-selection"
+            aria-label="Office and reporting month"
+          >
             <div className="section-body">
               <div className="field-row">
-                <div>
-                  <label htmlFor="track">Evaluation track</label>
-                  <select
-                    id="track"
-                    disabled={busy}
-                    value={track}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      navigate(() => {
-                        setTrack(value);
-                        setOfficeCode(
-                          snap.offices.find((o) => o.track === value)?.code ||
-                            "",
-                        );
-                        setDirty(false);
-                      });
-                    }}
-                  >
-                    <option>Frontline</option>
-                    <option>Non-frontline</option>
-                  </select>
-                </div>
                 <div style={{ flexGrow: 2 }}>
                   <label htmlFor="office">Office</label>
                   <select
@@ -322,19 +299,48 @@ export default function EnterPage() {
                       const value = e.target.value;
                       navigate(() => {
                         setOfficeCode(value);
+                        setTrack(
+                          snap.offices.find((o) => o.code === value)?.track ||
+                            "Frontline",
+                        );
+                        setManualDays(false);
                         setDirty(false);
                       });
                     }}
                   >
-                    {offices.map((o) => (
-                      <option key={o.code} value={o.code}>
-                        {o.name}
+                    {["Frontline", "Non-frontline"].map((group) => (
+                      <optgroup key={group} label={group}>
+                        {snap.offices
+                          .filter((o) => o.track === group)
+                          .map((o) => (
+                            <option key={o.code} value={o.code}>
+                              {o.name}
+                            </option>
+                          ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+                <div className="month-selector">
+                  <label htmlFor="reporting-month">Reporting month</label>
+                  <select
+                    id="reporting-month"
+                    disabled={busy}
+                    value={month}
+                    onChange={(e) => {
+                      setMonth(Number(e.target.value));
+                      setManualDays(false);
+                    }}
+                  >
+                    {MONTHS.map((m, i) => (
+                      <option key={m} value={i}>
+                        {m} 2026
                       </option>
                     ))}
                   </select>
                 </div>
               </div>
-              <p className="muted" style={{ fontSize: 11, margin: "16px 0 0" }}>
+              <p className="entry-focal">
                 <Icon name="people" size={14} /> Focal person:{" "}
                 <b>{office?.focal || "Not assigned"}</b>
                 {office?.focalPosition ? ` · ${office.focalPosition}` : ""}{" "}
@@ -344,130 +350,272 @@ export default function EnterPage() {
               </p>
             </div>
           </section>
-          <div className="tabs" aria-label="Evaluation criterion">
-            {criteria.map((c) => (
-              <button
-                key={c.key}
-                disabled={busy}
-                aria-pressed={criterion === c.key}
-                className={criterion === c.key ? "selected" : ""}
-                onClick={() =>
-                  navigate(() => {
-                    setCriterion(c.key);
-                    setDirty(false);
-                  })
-                }
-              >
-                {c.label}
-              </button>
-            ))}
+          <div className="entry-category">
+            <label htmlFor="entry-category">What are you updating?</label>
+            <select
+              id="entry-category"
+              value={criterion}
+              disabled={busy}
+              onChange={(e) => {
+                const value = e.target.value as Criterion;
+                navigate(() => {
+                  setCriterion(value);
+                  setManualDays(false);
+                  setDirty(false);
+                });
+              }}
+            >
+              {criteria.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <span className="entry-category-note">
+              One category at a time. Save before switching categories.
+            </span>
           </div>
-          <section className="section">
+          <section className="section focused-entry">
             <SectionHead
               num="02"
-              title={`${crit.label} · ${office?.short || office?.name || "Select an office"}`}
-              note={`${completeMonths} of ${MONTHS.length} months entered`}
+              title={`${crit.label}`}
+              note={`${MONTHS[month]} 2026`}
             />
             <div className="section-body">
-              <p className="muted" style={{ fontSize: 12, marginBottom: 18 }}>
-                {crit.hint}
-              </p>
+              <div className="entry-office-context">
+                <Icon name="building" size={17} />
+                <span>
+                  <strong>{office?.name || "Select an office"}</strong>
+                  <small>
+                    These entries apply only to this office and reporting month.
+                  </small>
+                </span>
+              </div>
+              <p className="entry-hint">{crit.hint}</p>
               {criterion === "timeliness" && calendarError && (
                 <ErrorState error={calendarError} />
               )}
               <div className="month-grid">
-                {MONTHS.map((m, i) => {
-                  const working = days.filter(
-                    (d) => Number(d.date.slice(5, 7)) === i + 1 && d.working,
-                  ).length;
+                {[month].map((i) => {
+                  const m = MONTHS[i];
                   return (
                     <div className="month-cell" key={m}>
-                      <b>
-                        {m.slice(0, 3)}
-                        <span className="month-meta">
-                          {days.length ? `${working} working days` : "2026"}
-                        </span>
-                      </b>
                       {criterion === "timeliness" && (
                         <>
-                          <label htmlFor={`release-${i}`}>Date released</label>
-                          <input
-                            disabled={busy || calendarLoading}
-                            id={`release-${i}`}
-                            type="date"
-                            min="2026-01-01"
-                            max="2026-12-31"
-                            value={dates[i].released}
-                            onChange={(e) =>
-                              updateDate(i, "released", e.target.value)
-                            }
-                          />
-                          <label htmlFor={`receive-${i}`}>Date received</label>
-                          <input
-                            disabled={busy || calendarLoading}
-                            id={`receive-${i}`}
-                            type="date"
-                            min={dates[i].released || "2026-01-01"}
-                            max="2026-12-31"
-                            value={dates[i].received}
-                            onChange={(e) =>
-                              updateDate(i, "received", e.target.value)
-                            }
-                          />
+                          <div
+                            className="entry-mode"
+                            role="group"
+                            aria-label="How to enter timeliness"
+                          >
+                            <button
+                              className={!manualDays ? "selected" : ""}
+                              aria-pressed={!manualDays}
+                              disabled={busy}
+                              onClick={() => setManualDays(false)}
+                            >
+                              Use dates
+                            </button>
+                            <button
+                              className={manualDays ? "selected" : ""}
+                              aria-pressed={manualDays}
+                              disabled={
+                                busy ||
+                                Boolean(dates[i].released || dates[i].received)
+                              }
+                              onClick={() => setManualDays(true)}
+                            >
+                              Enter days manually
+                            </button>
+                          </div>
+                          {!manualDays && (
+                            <div className="date-pair">
+                              <div>
+                                <label htmlFor={`release-${i}`}>
+                                  Date released
+                                </label>
+                                <input
+                                  disabled={busy || calendarLoading}
+                                  id={`release-${i}`}
+                                  type="date"
+                                  min="2026-01-01"
+                                  max="2026-12-31"
+                                  value={dates[i].released}
+                                  onChange={(e) =>
+                                    updateDate(i, "released", e.target.value)
+                                  }
+                                />
+                              </div>
+                              <div>
+                                <label htmlFor={`receive-${i}`}>
+                                  Date received
+                                </label>
+                                <input
+                                  disabled={busy || calendarLoading}
+                                  id={`receive-${i}`}
+                                  type="date"
+                                  min={dates[i].released || "2026-01-01"}
+                                  max="2026-12-31"
+                                  value={dates[i].received}
+                                  onChange={(e) =>
+                                    updateDate(i, "received", e.target.value)
+                                  }
+                                />
+                              </div>
+                            </div>
+                          )}
                         </>
                       )}
-                      <label htmlFor={`f-${i}`}>{crit.first}</label>
-                      <input
-                        disabled={
-                          busy ||
-                          (criterion === "timeliness" &&
-                            Boolean(dates[i].released || dates[i].received))
-                        }
-                        id={`f-${i}`}
-                        aria-label={`${m} ${crit.first}`}
-                        type="number"
-                        min={0}
-                        max={criterion === "gpr" ? 100 : undefined}
-                        step={1}
-                        value={first[i]}
-                        placeholder="—"
-                        onChange={(e) => {
-                          setFirst((p) =>
-                            p.map((v, j) => (j === i ? e.target.value : v)),
-                          );
-                          setDirty(true);
-                          setMessage(null);
-                        }}
-                      />
-                      {crit.second && (
-                        <>
-                          <label htmlFor={`s-${i}`}>{crit.second}</label>
-                          <input
+                      {(criterion !== "timeliness" || manualDays) && (
+                        <div className="entry-number-fields">
+                          <div>
+                            <label htmlFor={`f-${i}`}>{crit.first}</label>
+                            <input
+                              disabled={
+                                busy ||
+                                (criterion === "timeliness" &&
+                                  Boolean(
+                                    dates[i].released || dates[i].received,
+                                  ))
+                              }
+                              id={`f-${i}`}
+                              aria-label={`${m} ${crit.first}`}
+                              type="number"
+                              min={0}
+                              max={criterion === "gpr" ? 100 : undefined}
+                              step={criterion === "gpr" ? "0.01" : "1"}
+                              value={first[i]}
+                              placeholder="—"
+                              onChange={(e) => {
+                                setFirst((p) =>
+                                  p.map((v, j) =>
+                                    j === i ? e.target.value : v,
+                                  ),
+                                );
+                                setDirty(true);
+                                setMessage(null);
+                              }}
+                            />
+                          </div>
+                          {crit.second && (
+                            <div>
+                              <label htmlFor={`s-${i}`}>{crit.second}</label>
+                              <input
+                                disabled={busy}
+                                id={`s-${i}`}
+                                aria-label={`${m} ${crit.second}`}
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={second[i]}
+                                placeholder="—"
+                                onChange={(e) => {
+                                  setSecond((p) =>
+                                    p.map((v, j) =>
+                                      j === i ? e.target.value : v,
+                                    ),
+                                  );
+                                  setDirty(true);
+                                  setMessage(null);
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {criterion === "timeliness" && manualDays && (
+                        <p className="field-help">
+                          Enter 99 if the plan was due but not submitted. Leave
+                          blank if no plan was due.
+                        </p>
+                      )}
+                      {criterion === "timeliness" &&
+                        !manualDays &&
+                        first[i] !== "" &&
+                        !dates[i].released &&
+                        !dates[i].received && (
+                          <p className="field-help">
+                            A day count is already recorded. Choose “Enter days
+                            manually” to edit it, or enter dates to replace it.
+                          </p>
+                        )}
+                      {criterion === "timeliness" &&
+                        Boolean(dates[i].released || dates[i].received) && (
+                          <button
+                            className="clear-date-link"
                             disabled={busy}
-                            id={`s-${i}`}
-                            aria-label={`${m} ${crit.second}`}
-                            type="number"
-                            min={0}
-                            step={1}
-                            value={second[i]}
-                            placeholder="—"
-                            onChange={(e) => {
-                              setSecond((p) =>
-                                p.map((v, j) => (j === i ? e.target.value : v)),
+                            onClick={() => {
+                              setDates((p) =>
+                                p.map((d, j) =>
+                                  j === i ? { released: "", received: "" } : d,
+                                ),
+                              );
+                              setFirst((p) =>
+                                p.map((v, j) => (j === i ? "" : v)),
                               );
                               setDirty(true);
                               setMessage(null);
                             }}
-                          />
-                        </>
-                      )}
-                      <div className="computed">
-                        {criterion === "timeliness" ? "Score" : "Rate"}:{" "}
-                        <b>{liveScore(i)}</b>
+                          >
+                            Clear dates for this month
+                          </button>
+                        )}
+                      <div className="entry-calculation" aria-live="polite">
+                        <div>
+                          <span>
+                            {criterion === "timeliness"
+                              ? "Working days elapsed"
+                              : criterion === "gpr"
+                                ? "Overall rating"
+                                : "Calculated rate"}
+                          </span>
+                          <strong>
+                            {criterion === "timeliness"
+                              ? first[i] === ""
+                                ? "—"
+                                : first[i]
+                              : liveScore(i)}
+                          </strong>
+                        </div>
+                        {criterion === "timeliness" && (
+                          <div>
+                            <span>Timeliness score</span>
+                            <strong>{liveScore(i)}</strong>
+                          </div>
+                        )}
+                        <p>
+                          {criterion === "timeliness"
+                            ? "Weekends and non-working days are excluded. Both dates are included."
+                            : "Calculated from your entries. Rankings update when you save."}
+                        </p>
                       </div>
                     </div>
                   );
                 })}
+              </div>
+              <div className="month-navigation">
+                <button
+                  className="btn secondary small"
+                  disabled={busy || month === 0}
+                  onClick={() => {
+                    setMonth((m) => m - 1);
+                    setManualDays(false);
+                  }}
+                >
+                  ← Previous month
+                </button>
+                <span>
+                  {month + 1} of {MONTHS.length} months
+                </span>
+                <button
+                  className="btn secondary small"
+                  disabled={busy || month === MONTHS.length - 1}
+                  onClick={() => {
+                    setMonth((m) => m + 1);
+                    setManualDays(false);
+                  }}
+                >
+                  Next month →
+                </button>
               </div>
             </div>
           </section>
@@ -482,8 +630,8 @@ export default function EnterPage() {
           <div className="save-bar">
             <p>
               {dirty
-                ? "You have unsaved changes. Blank months are saved as no data."
-                : "Blank means no data. A zero is a recorded score."}
+                ? "Unsaved changes for this office and category."
+                : "All changes saved. You can move to another month."}
             </p>
             <button
               className="btn"
@@ -496,9 +644,82 @@ export default function EnterPage() {
               onClick={save}
             >
               <Icon name="check" size={15} />
-              {busy ? "Saving…" : "Save monthly scores"}
+              {busy ? "Saving…" : "Save changes"}
             </button>
           </div>
+          <details className="section month-summary">
+            <summary>
+              <span>View all months</span>
+              <span>
+                {completeMonths} of {MONTHS.length} entered
+              </span>
+              <Icon name="down" size={15} />
+            </summary>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Reporting month</th>
+                    {criterion === "timeliness" ? (
+                      <>
+                        <th>Released</th>
+                        <th>Received</th>
+                        <th>Working days</th>
+                      </>
+                    ) : (
+                      <>
+                        <th>{crit.first}</th>
+                        {crit.second && <th>{crit.second}</th>}
+                      </>
+                    )}
+                    <th>{criterion === "timeliness" ? "Score" : "Result"}</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {MONTHS.map((m, i) => (
+                    <tr
+                      key={m}
+                      className={month === i ? "selected-month-row" : ""}
+                    >
+                      <td>{m} 2026</td>
+                      {criterion === "timeliness" ? (
+                        <>
+                          <td>{dates[i].released || "—"}</td>
+                          <td>{dates[i].received || "—"}</td>
+                          <td>{first[i] || "—"}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td>{first[i] || "—"}</td>
+                          {crit.second && <td>{second[i] || "—"}</td>}
+                        </>
+                      )}
+                      <td>{liveScore(i)}</td>
+                      <td>
+                        <button
+                          className="summary-edit"
+                          disabled={busy}
+                          onClick={() => {
+                            setMonth(i);
+                            setManualDays(false);
+                            document
+                              .querySelector(".focused-entry")
+                              ?.scrollIntoView({
+                                behavior: "smooth",
+                                block: "start",
+                              });
+                          }}
+                        >
+                          Edit<span className="sr-only"> {m}</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
         </>
       )}
       <dialog
