@@ -46,13 +46,24 @@ export function collectionRate(
   sampleConstant: number,
   minForms: number,
 ): number | null {
-  if (forms === null || clients === null) return null;
+  if (forms === null) return null;
   if (forms < minForms) return 0;
   // The sheet checks the minimum first, including recorded zero-visitor months.
-  if (clients <= 0) return null;
+  if (clients === null || clients <= 0) return null;
   const rate =
     forms / ((clients * sampleConstant) / (clients - 1 + sampleConstant));
   return Math.min(1, rate);
+}
+
+/** Keep the recorded GAR separate from the score allowed by respondent coverage. */
+export function gprRate(
+  recordedGar: number | null,
+  forms: number | null,
+  minForms: number,
+): number | null {
+  if (forms === null) return null;
+  if (forms < minForms) return 0;
+  return recordedGar === null ? null : recordedGar / 100;
 }
 
 export function timelinessScore(
@@ -124,7 +135,7 @@ export function computeOffice(
   const minForms = numSetting(
     settings,
     isFL ? "min_forms_fl" : "min_forms_nfl",
-    0,
+    isFL ? 20 : 10,
   );
   const bands = [
     numSetting(settings, "time_band_1_3", 1.0),
@@ -160,7 +171,7 @@ export function computeOffice(
     collRates.push(
       collectionRate(c.forms, c.clients, sampleConstant, minForms),
     );
-    gprRates.push(g === null ? null : g / 100);
+    gprRates.push(gprRate(g, c.forms, minForms));
     timeScores.push(r.plans === 0 ? 1 : timelinessScore(d, bands));
   }
 

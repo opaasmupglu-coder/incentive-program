@@ -133,7 +133,7 @@ npm start
 The repo is connected to Vercel — every push to `main` auto-deploys.
 Do not create a second Vercel project for this app.
 
-## Rules the app computes (same as the old sheet's formulas)
+## Program scoring rules
 
 - Resolution rate = total acted upon / total negative comments. Confirmed zero
   negatives score 100%; a missing negative total or a positive negative total
@@ -141,11 +141,17 @@ Do not create a second Vercel project for this app.
   total negative comments.
 - Collection rate = min(1, forms / (clients × 384.16 / ((clients−1) + 384.16))),
   0 if forms < the track minimum (20 Frontline / 10 Non-frontline), blank if
-  forms/clients are missing. The minimum-forms check precedes denominator
+  forms are missing. The minimum-forms check precedes denominator
   validation, matching the FL and NFL sheet formulas: recorded 0 forms and
   0 visitors yield 0, while qualifying forms with 0 visitors remain unavailable.
 - Timeliness score from days: ≤3 → 1.0, ≤5 → 0.8, ≤7 → 0.6, ≤10 → 0.4,
-  ≤15 → 0.2, else 0.0. GPR rate = GPR / 100.
+  ≤15 → 0.2, else 0.0.
+- Scored GPR = recorded GAR / 100 only when the monthly forms collected meet
+  the track minimum (20 Frontline / 10 Non-frontline). Below the minimum, both
+  collection and GPR score 0%, including months whose recorded GAR is missing.
+  These zero scores are included in office averages and rankings. A missing
+  form count stays pending. Original GAR values remain stored without changes;
+  Monthly Scores shows the recorded GAR and the scored GPR separately.
 - Per-office averages average the monthly rates, ignoring blank months.
   Initial total = the four weighted points, only when all four criteria
   have at least one month of data.

@@ -5,7 +5,12 @@ import { MONTHS } from "@/lib/types";
 import { fmtPct, useSnapshot } from "@/components/useSnapshot";
 import { useCalendar } from "@/components/useCalendar";
 import { countWorkingDays } from "@/lib/working-days";
-import { resolutionRate, collectionRate, timelinessScore } from "@/lib/compute";
+import {
+  resolutionRate,
+  collectionRate,
+  timelinessScore,
+  gprRate,
+} from "@/lib/compute";
 import {
   ErrorState,
   LoadingState,
@@ -32,7 +37,7 @@ const criteria = [
   {
     key: "gpr" as const,
     label: "Overall rating",
-    first: "Overall rating (%)",
+    first: "Recorded GAR (%)",
     second: null,
     hint: "Enter the office’s General Average Rating as a percentage, for example 95.63.",
   },
@@ -170,6 +175,12 @@ export default function EnterPage() {
   ];
   if (criterion === "resolution") inputFields.reverse();
   const office = snap.offices.find((o) => o.code === officeCode);
+  const minForms =
+    track === "Frontline"
+      ? (snap.settings?.minFormsFL ?? 20)
+      : (snap.settings?.minFormsNFL ?? 10);
+  const recordedForms = (i: number) =>
+    snap.inputCollection.find((r) => r.code === officeCode)?.first[i] ?? null;
   const num = (v: string) => (v.trim() === "" ? null : Number(v));
   const noSubmissionRequired = (i: number) =>
     snap.inputResolution.find((r) => r.code === officeCode)?.second[i] === 0;
@@ -179,16 +190,10 @@ export default function EnterPage() {
     if (criterion === "resolution") return fmtPct(resolutionRate(a, b));
     if (criterion === "collection")
       return fmtPct(
-        collectionRate(
-          a,
-          b,
-          snap.settings?.sampleConstant || 384.16,
-          track === "Frontline"
-            ? (snap.settings?.minFormsFL ?? 20)
-            : (snap.settings?.minFormsNFL ?? 10),
-        ),
+        collectionRate(a, b, snap.settings?.sampleConstant || 384.16, minForms),
       );
-    if (criterion === "gpr") return a === null ? "—" : `${a}/100`;
+    if (criterion === "gpr")
+      return fmtPct(gprRate(a, recordedForms(i), minForms));
     if (noSubmissionRequired(i)) return "1.00";
     return (
       timelinessScore(
@@ -441,6 +446,8 @@ export default function EnterPage() {
             </div>
             <p className="table-entry-hint">
               {crit.hint}
+              {(criterion === "collection" || criterion === "gpr") &&
+                ` Fewer than ${minForms} forms in a month scores 0% for both collection and GPR. The original GAR is kept for reference.`}
               {criterion === "timeliness"
                 ? " Months with no negative comments need no submission."
                 : ""}
@@ -466,18 +473,15 @@ export default function EnterPage() {
                         <th key={field.key}>{field.label}</th>
                       ))
                     )}
-                    {criterion !== "gpr" && (
-                      <th className="num">
-                        {criterion === "timeliness"
-                          ? "Timeliness score"
-                          : "Resolution rate".replace(
-                              "Resolution",
-                              criterion === "collection"
-                                ? "Collection"
-                                : "Resolution",
-                            )}
-                      </th>
-                    )}
+                    <th className="num">
+                      {criterion === "timeliness"
+                        ? "Timeliness score"
+                        : criterion === "gpr"
+                          ? "Scored GPR"
+                          : criterion === "collection"
+                            ? "Collection rate"
+                            : "Resolution rate"}
+                    </th>
                     <th>
                       <span className="sr-only">Edit row</span>
                     </th>
@@ -490,6 +494,14 @@ export default function EnterPage() {
                     const noSubmission =
                       criterion === "timeliness" && noSubmissionRequired(i);
                     const rawScore = liveScore(i);
+                    const formCount =
+                      criterion === "collection"
+                        ? num(first[i])
+                        : recordedForms(i);
+                    const belowMinimum =
+                      (criterion === "collection" || criterion === "gpr") &&
+                      formCount !== null &&
+                      formCount < minForms;
                     const score =
                       criterion === "timeliness" && rawScore !== "—"
                         ? fmtPct(Number(rawScore))
@@ -621,15 +633,18 @@ export default function EnterPage() {
                             );
                           })
                         )}
-                        {criterion !== "gpr" && (
-                          <td className="num monthly-result">
-                            <b>{score}</b>
-                            {(noSubmission ||
-                              (criterion === "resolution" && zeroNegative)) && (
-                              <small>No action required</small>
-                            )}
-                          </td>
-                        )}
+                        <td className="num monthly-result">
+                          <b>{score}</b>
+                          {belowMinimum && (
+                            <small className="below-minimum-note">
+                              Below minimum ({formCount}/{minForms} forms)
+                            </small>
+                          )}
+                          {(noSubmission ||
+                            (criterion === "resolution" && zeroNegative)) && (
+                            <small>No action required</small>
+                          )}
+                        </td>
                         <td>
                           {noSubmission ? (
                             <span className="badge green">Not required</span>
