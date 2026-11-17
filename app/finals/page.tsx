@@ -2,12 +2,7 @@
 import { memo, useMemo, useState } from "react";
 import Icon from "@/components/Icon";
 import { downloadCsv } from "@/lib/export";
-import {
-  fmtNum,
-  fmtPct,
-  freshnessText,
-  useSnapshot,
-} from "@/components/useSnapshot";
+import { fmtPct, freshnessText, useSnapshot } from "@/components/useSnapshot";
 import {
   ErrorState,
   LoadingState,
@@ -29,10 +24,12 @@ const FinalTable = memo(function FinalTable({
   rows,
   kind,
   initialWeight,
+  validatorWeight,
 }: {
   rows: FinalRow[];
   kind: "office" | "focal";
   initialWeight: number;
+  validatorWeight: number;
 }) {
   if (rows.length === 0) {
     return <p className="muted">No final results in this group yet.</p>;
@@ -44,12 +41,13 @@ const FinalTable = memo(function FinalTable({
           <tr>
             <th className="num">Rank</th>
             <th>{kind === "office" ? "Office" : "Focal person"}</th>
-            <th className="num">Final total</th>
-            <th className="num">Initial total</th>
             <th className="num">
-              Initial × {Math.round(initialWeight * 100)}%
+              Initial Result ({Math.round(initialWeight * 100)}%)
             </th>
-            <th className="num">Validator average</th>
+            <th className="num">
+              Validator Score ({Math.round(validatorWeight * 100)}%)
+            </th>
+            <th className="num">Final Rating</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -70,15 +68,38 @@ const FinalTable = memo(function FinalTable({
                 <b>{r.name}</b>
                 {r.officeName && <span className="sub">{r.officeName}</span>}
               </td>
-              <td className="num">
-                <b>{r.finalTotal !== null ? fmtPct(r.finalTotal) : "—"}</b>
+              <td className="num criterion-result">
+                {r.initial60 === null ? (
+                  "—"
+                ) : (
+                  <>
+                    <b>{fmtPct(r.initial60)}</b>{" "}
+                    <span className="actual-percentage">
+                      ({fmtPct(r.initialTotal)})
+                    </span>
+                  </>
+                )}
               </td>
-              <td className="num">{fmtPct(r.initialTotal)}</td>
-              <td className="num">
-                {r.initial60 !== null ? fmtNum(r.initial60) : "—"}
+              <td className="num criterion-result">
+                {r.validatorAvg === null ? (
+                  "—"
+                ) : (
+                  <>
+                    <b>{fmtPct(r.validatorAvg)}</b>{" "}
+                    <span className="actual-percentage">
+                      (
+                      {fmtPct(
+                        validatorWeight > 0
+                          ? r.validatorAvg / validatorWeight
+                          : null,
+                      )}
+                      )
+                    </span>
+                  </>
+                )}
               </td>
               <td className="num">
-                {r.validatorAvg !== null ? fmtNum(r.validatorAvg) : "—"}
+                <b>{fmtPct(r.finalTotal)}</b>
               </td>
               <td>
                 {r.finalTotal !== null ? (
@@ -134,12 +155,19 @@ export default function FinalsPage() {
     );
   }
 
+  const initialWeight = snap.settings?.finalInitialWeight ?? 0.6;
+  const officeWeight = snap.settings?.officeSubtotal ?? 0.4;
+  const focalWeight = snap.settings?.focalSubtotal ?? 0.4;
+  const validatorWeight = kind === "Offices" ? officeWeight : focalWeight;
+  const percentNumber = (value: number | null) =>
+    value === null ? null : Math.round(value * 1000000) / 10000;
+
   return (
     <>
       <PageHead
         kicker="Section 05"
         title="Final results"
-        description={`${Math.round((snap.settings?.finalInitialWeight ?? 0.6) * 100)}% initial evaluation + weighted validator scores. Recognizing the top offices and focal persons in each track.`}
+        description={`${Math.round(initialWeight * 100)}% initial result + ${Math.round(validatorWeight * 100)}% validator score = final rating.`}
         right={
           <button
             className="btn secondary"
@@ -150,20 +178,37 @@ export default function FinalsPage() {
                   "Category",
                   "Rank",
                   "Office / focal person",
-                  "Initial score",
-                  "Weighted initial",
-                  "Validator average",
-                  "Final score",
+                  "Initial result weighted (%)",
+                  "Initial result actual (%)",
+                  "Validator score weighted (%)",
+                  "Validator score actual (%)",
+                  "Final rating (%)",
                   "Status",
                 ],
                 ...[
-                  { track: "Frontline", kind: "Office", rows: flOffices },
-                  { track: "Frontline", kind: "Focal person", rows: flFocals },
-                  { track: "Non-frontline", kind: "Office", rows: nflOffices },
+                  {
+                    track: "Frontline",
+                    kind: "Office",
+                    rows: flOffices,
+                    validatorWeight: officeWeight,
+                  },
+                  {
+                    track: "Frontline",
+                    kind: "Focal person",
+                    rows: flFocals,
+                    validatorWeight: focalWeight,
+                  },
+                  {
+                    track: "Non-frontline",
+                    kind: "Office",
+                    rows: nflOffices,
+                    validatorWeight: officeWeight,
+                  },
                   {
                     track: "Non-frontline",
                     kind: "Focal person",
                     rows: nflFocals,
+                    validatorWeight: focalWeight,
                   },
                 ].flatMap((g) =>
                   g.rows.map((r) => [
@@ -171,10 +216,15 @@ export default function FinalsPage() {
                     g.kind,
                     r.rank,
                     r.name,
-                    r.initialTotal,
-                    r.initial60,
-                    r.validatorAvg,
-                    r.finalTotal,
+                    percentNumber(r.initial60),
+                    percentNumber(r.initialTotal),
+                    percentNumber(r.validatorAvg),
+                    percentNumber(
+                      r.validatorAvg !== null && g.validatorWeight > 0
+                        ? r.validatorAvg / g.validatorWeight
+                        : null,
+                    ),
+                    percentNumber(r.finalTotal),
                     r.status,
                   ]),
                 ),
@@ -219,6 +269,11 @@ export default function FinalsPage() {
           ))}
         </div>
       </div>
+      <p className="rankings-explanation">
+        <b>How to read the scores:</b> weighted contribution (actual score). The
+        two weighted contributions add up to the final rating. Missing ratings
+        stay blank.
+      </p>
       {track === "Frontline" && kind === "Offices" && (
         <section className="section" aria-label="Frontline office results">
           <SectionHead num="01" title="Frontline — Offices" />
@@ -226,7 +281,8 @@ export default function FinalsPage() {
             <FinalTable
               rows={flOffices}
               kind="office"
-              initialWeight={snap.settings?.finalInitialWeight ?? 0.6}
+              initialWeight={initialWeight}
+              validatorWeight={officeWeight}
             />
           </div>
         </section>
@@ -242,7 +298,8 @@ export default function FinalsPage() {
             <FinalTable
               rows={flFocals}
               kind="focal"
-              initialWeight={snap.settings?.finalInitialWeight ?? 0.6}
+              initialWeight={initialWeight}
+              validatorWeight={focalWeight}
             />
           </div>
         </section>
@@ -255,7 +312,8 @@ export default function FinalsPage() {
             <FinalTable
               rows={nflOffices}
               kind="office"
-              initialWeight={snap.settings?.finalInitialWeight ?? 0.6}
+              initialWeight={initialWeight}
+              validatorWeight={officeWeight}
             />
           </div>
         </section>
@@ -271,7 +329,8 @@ export default function FinalsPage() {
             <FinalTable
               rows={nflFocals}
               kind="focal"
-              initialWeight={snap.settings?.finalInitialWeight ?? 0.6}
+              initialWeight={initialWeight}
+              validatorWeight={focalWeight}
             />
           </div>
         </section>
