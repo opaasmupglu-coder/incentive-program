@@ -41,8 +41,9 @@ offices per page and keeps edits when moving between pages.
 **Initial rankings & Top 5** shows running totals and provisional ranks while
 criteria are incomplete. Each criterion displays its weighted score followed by
 the actual average in parentheses. Missing criteria remain blank. Provisional
-totals and Top 5 are for display only; official qualification still requires
-all four criteria. Evaluation settings put Frontline and Non-frontline weights
+totals select the same Top 5 for Office rankings, Validator ratings, and Final
+results. Pending data does not exclude an office; its scores remain marked
+provisional until completed. Evaluation settings put Frontline and Non-frontline weights
 in separate cards, each with its own 100% total.
 
 **Offices & people** lets you search by office or person, edit focal names and
@@ -157,7 +158,7 @@ Do not create a second Vercel project for this app.
 - Per-office averages average the monthly rates, ignoring blank months.
   Initial total = the four weighted points, only when all four criteria
   have at least one month of data.
-- Top 5 per track by unique tie-break rank (ties break by office list
+- Top 5 per track by running initial total, including pending offices (ties break by office list
   order). Validator office/focal totals need all items scored; averages
   use only the validators who rated (a missing validator is not a zero).
 - Final total = 60% × Initial + validator average, ranked among the 5.

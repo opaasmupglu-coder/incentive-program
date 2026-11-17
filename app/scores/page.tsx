@@ -33,11 +33,9 @@ export default function ScoresPage() {
   if (loading) return <LoadingState />;
   if (error) return <ErrorState error={error} />;
   if (!snap) return <LoadingState />;
-  const top5 = (
-    track === "Frontline"
-      ? snap.validatorAvg.slice(0, 5)
-      : snap.validatorAvg.slice(5, 10)
-  ).filter((o) => o.code);
+  const top5 = snap.validatorAvg.filter((row) =>
+    snap.offices.some((o) => o.code === row.code && o.track === track),
+  );
   const office = top5.find((o) => o.code === selectedOffice) || top5[0];
   const validatorNames = snap.settings?.validatorNames.filter(Boolean) || [];
   const validator = validatorNames.includes(selectedValidator)
@@ -233,8 +231,7 @@ export default function ScoresPage() {
               <Icon name="check" size={32} />
               <b>The next stage starts with monthly scores.</b>
               <p>
-                Offices qualify for validation once all four initial evaluation
-                criteria have data.
+                The current Top 5 appear here as initial scores are entered.
               </p>
               <Link className="btn" href="/enter">
                 Enter monthly scores <Icon name="arrow" size={15} />

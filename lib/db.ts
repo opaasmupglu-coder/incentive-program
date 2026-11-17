@@ -3,6 +3,7 @@
 // shape matches what the UI pages already expect.
 import { getTurso, missingEnv } from "./turso";
 import { ensureCalendar, zeroNegativeSubmissionCleanup } from "./calendar";
+import { initialTop5 } from "./initial-preview";
 import {
   assignRanks,
   buildChecks,
@@ -252,14 +253,17 @@ async function fetchSnapshot(): Promise<Snapshot> {
   assignRanks(initialFL, sortOrder);
   assignRanks(initialNFL, sortOrder);
 
-  const top5FL = [...initialFL]
-    .filter((r) => r.tieBreakRank !== null)
-    .sort((a, b) => (a.tieBreakRank as number) - (b.tieBreakRank as number))
-    .slice(0, 5);
-  const top5NFL = [...initialNFL]
-    .filter((r) => r.tieBreakRank !== null)
-    .sort((a, b) => (a.tieBreakRank as number) - (b.tieBreakRank as number))
-    .slice(0, 5);
+  const settings = toSettingsObject(settingsMap);
+  const top5FL = initialTop5(
+    initialFL,
+    settings.flWeights,
+    settings.gprMax || 100,
+  );
+  const top5NFL = initialTop5(
+    initialNFL,
+    settings.nflWeights,
+    settings.gprMax || 100,
+  );
 
   const scoreEntries: ScoreEntry[] = scoresRes.rows.map((r) => ({
     track: String(r.track),
@@ -280,8 +284,8 @@ async function fetchSnapshot(): Promise<Snapshot> {
     settingsMap,
     scoreEntries,
   );
-  const finalFL = buildFinals(top5FL, validatorAvg.slice(0, 5), settingsMap);
-  const finalNFL = buildFinals(top5NFL, validatorAvg.slice(5, 10), settingsMap);
+  const finalFL = buildFinals(top5FL, validatorAvg, settingsMap);
+  const finalNFL = buildFinals(top5NFL, validatorAvg, settingsMap);
   for (const row of [...finalFL.focals, ...finalNFL.focals]) {
     const office = offices.find((o) => o.code === row.code);
     row.officeName = office?.name || row.name;
@@ -370,8 +374,12 @@ async function fetchSnapshot(): Promise<Snapshot> {
     completeNFL: initialNFL.filter((r) => r.status.startsWith("✓")).length,
     top5FL: top5FL.length,
     top5NFL: top5NFL.length,
-    finalsFL: finalFL.offices.filter((r) => r.finalTotal !== null).length,
-    finalsNFL: finalNFL.offices.filter((r) => r.finalTotal !== null).length,
+    finalsFL: finalFL.offices.filter(
+      (r) => r.finalTotal !== null && !r.initialProvisional,
+    ).length,
+    finalsNFL: finalNFL.offices.filter(
+      (r) => r.finalTotal !== null && !r.initialProvisional,
+    ).length,
     ratedOffice,
     ratedFocal,
   });
@@ -560,10 +568,9 @@ export async function writeScores(input: {
   if (!db)
     throw new Error("Database is not connected (missing Turso env vars).");
   const snap = await getSnapshot();
-  const top5 =
-    input.track === "Frontline"
-      ? snap.validatorAvg.slice(0, 5)
-      : snap.validatorAvg.slice(5, 10);
+  const top5 = snap.validatorAvg.filter((row) =>
+    snap.offices.some((o) => o.code === row.code && o.track === input.track),
+  );
   const office = top5[input.rank - 1];
   if (!office || !office.code)
     throw new Error(`No office at rank ${input.rank} for ${input.track}.`);

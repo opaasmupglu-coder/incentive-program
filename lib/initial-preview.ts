@@ -17,7 +17,7 @@ export function initialCriteria(
   }));
 }
 
-/** Read-only presentation totals. Does not change official totals or qualification. */
+/** Running totals and stable ranks; incomplete source totals remain null. */
 export function initialPreview(
   rows: InitialRow[],
   weights: number[],
@@ -60,4 +60,15 @@ export function initialPreview(
     row.previewTop5 = index < 5;
   }
   return preview;
+}
+
+/** Use the same running Top 5 for rankings, validator ratings, and finals. */
+export function initialTop5(
+  rows: InitialRow[],
+  weights: number[],
+  gprScale = 100,
+) {
+  return initialPreview(rows, weights, gprScale).filter(
+    (row) => row.previewTop5,
+  );
 }

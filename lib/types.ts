@@ -86,6 +86,7 @@ export type FinalRow = {
   name: string;
   officeName?: string;
   initialTotal: number | null;
+  initialProvisional?: boolean;
   initial60: number | null;
   validatorAvg: number | null;
   finalTotal: number | null;

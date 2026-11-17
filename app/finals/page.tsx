@@ -77,6 +77,9 @@ const FinalTable = memo(function FinalTable({
                     <span className="actual-percentage">
                       ({fmtPct(r.initialTotal)})
                     </span>
+                    {r.initialProvisional && (
+                      <span className="criterion-weight">Provisional</span>
+                    )}
                   </>
                 )}
               </td>
@@ -102,7 +105,7 @@ const FinalTable = memo(function FinalTable({
                 <b>{fmtPct(r.finalTotal)}</b>
               </td>
               <td>
-                {r.finalTotal !== null ? (
+                {r.finalTotal !== null && !r.initialProvisional ? (
                   <span className="status-done">Final</span>
                 ) : (
                   <span className="status-wait">{r.status || "Waiting"}</span>

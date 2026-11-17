@@ -47,7 +47,7 @@ export default function OverviewPage() {
     snap.validators.filter((r) => r.focalRated).length;
   const expectedRatings = snap.validators.length * 2;
   const finalCount = [...snap.finalFL.offices, ...snap.finalNFL.offices].filter(
-    (r) => r.finalTotal !== null,
+    (r) => r.finalTotal !== null && !r.initialProvisional,
   ).length;
   const next =
     complete < total || total === 0

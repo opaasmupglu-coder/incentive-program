@@ -263,8 +263,9 @@ export default function RankingsPage() {
             <div className="rankings-footnote">
               <Icon name="help" size={17} />
               <p>
-                This preview updates as you enter scores. An office still needs
-                all four criteria before it qualifies for validator ratings.{" "}
+                The current Top 5 also appear in Validator ratings and Final
+                results. Pending data keeps their scores provisional without
+                excluding them.{" "}
                 <Link href="/enter">Continue entering monthly scores →</Link>
               </p>
             </div>

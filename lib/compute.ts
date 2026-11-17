@@ -407,7 +407,7 @@ export function buildValidators(
 
 /** Build final rows (office + focal) for one track's top 5. */
 export function buildFinals(
-  top5: InitialRow[],
+  top5: (InitialRow & { displayTotal?: number | null })[],
   avgRows: ValidatorAvgRow[],
   settings: SettingsMap,
 ): { offices: FinalRow[]; focals: FinalRow[] } {
@@ -416,7 +416,17 @@ export function buildFinals(
   const focals: FinalRow[] = [];
   top5.forEach((office) => {
     const avg = avgRows.find((a) => a.code === office.code);
-    const initial60 = office.total !== null ? office.total * mix : null;
+    const initialTotal = office.total ?? office.displayTotal ?? null;
+    const initialProvisional = office.total === null;
+    const initial60 = initialTotal !== null ? initialTotal * mix : null;
+    const status = (final: number | null) =>
+      initialProvisional
+        ? final !== null
+          ? `Provisional: ${office.status}`
+          : "Pending initial data; waiting: validator rating"
+        : final !== null
+          ? "✓ Final"
+          : "Waiting: validator rating";
     const offFinal =
       initial60 !== null &&
       avg?.officeAvg !== null &&
@@ -432,32 +442,24 @@ export function buildFinals(
     offices.push({
       code: office.code,
       name: office.name,
-      initialTotal: office.total,
+      initialTotal,
+      initialProvisional,
       initial60,
       validatorAvg: avg?.officeAvg ?? null,
       finalTotal: offFinal,
       rank: null,
-      status:
-        offFinal !== null
-          ? "✓ Final"
-          : office.total === null
-            ? "Waiting: initial result"
-            : "Waiting: validator rating",
+      status: status(offFinal),
     });
     focals.push({
       code: office.code,
       name: office.name,
-      initialTotal: office.total,
+      initialTotal,
+      initialProvisional,
       initial60,
       validatorAvg: avg?.focalAvg ?? null,
       finalTotal: focFinal,
       rank: null,
-      status:
-        focFinal !== null
-          ? "✓ Final"
-          : office.total === null
-            ? "Waiting: initial result"
-            : "Waiting: validator rating",
+      status: status(focFinal),
     });
   });
   const rankList = (rows: FinalRow[]) => {
