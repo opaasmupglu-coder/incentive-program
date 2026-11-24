@@ -279,6 +279,16 @@
       "focal_position": "Administrative Officer II",
       "notes": "In the old file this office appears ONLY in the NFL input sheet — it was missing from NFL_RECAP, all validator sheets and every Final sheet. Focal name from TABTV — please verify.",
       "sort_order": 27
+    },
+    {
+      "code": "NF12",
+      "short": "OPA",
+      "full_name": "Office of the Provincial Administrator (OPA)",
+      "track": "Non-frontline",
+      "focal_name": "Jeffrey P. Racca",
+      "focal_position": "Administrative Aide I",
+      "notes": "Focal name from TABTV — please verify.",
+      "sort_order": 28
     }
   ],
   "settings": {
