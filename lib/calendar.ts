@@ -15,6 +15,9 @@ export async function ensureCalendar() {
         ],
         "write",
       );
+      try {
+        await db.execute("ALTER TABLE offices ADD COLUMN hidden INTEGER DEFAULT 0");
+      } catch {}
       const count = await db.execute(
         "SELECT COUNT(*) AS n FROM working_days WHERE date LIKE '2026-%'",
       );

@@ -13,7 +13,7 @@ import { getTurso } from "./turso";
 const DDL = [
   `CREATE TABLE IF NOT EXISTS offices (
      code TEXT PRIMARY KEY, short TEXT, full_name TEXT, track TEXT,
-     focal_name TEXT, focal_position TEXT, notes TEXT, sort_order INTEGER)`,
+     focal_name TEXT, focal_position TEXT, notes TEXT, sort_order INTEGER, hidden INTEGER DEFAULT 0)`,
   `CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)`,
   `CREATE TABLE IF NOT EXISTS monthly_resolution (
      office_code TEXT, month INTEGER, acted INTEGER, plans INTEGER,
@@ -80,9 +80,9 @@ export async function runSeed(): Promise<Record<string, number>> {
   for (const o of data.offices) {
     stmts.push({
       sql: `INSERT OR REPLACE INTO offices
-        (code, short, full_name, track, focal_name, focal_position, notes, sort_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [o.code, o.short, o.full_name, o.track, o.focal_name, o.focal_position, o.notes, o.sort_order],
+        (code, short, full_name, track, focal_name, focal_position, notes, sort_order, hidden)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [o.code, o.short, o.full_name, o.track, o.focal_name, o.focal_position, o.notes, o.sort_order, (o as any).hidden ?? 0],
     });
   }
   for (const [key, value] of Object.entries(data.settings)) {

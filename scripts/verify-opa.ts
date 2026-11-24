@@ -5,73 +5,46 @@ import assert from "node:assert/strict";
 process.loadEnvFile(".env.local");
 
 async function main() {
-  console.log("Verifying snapshot with OPA (NF12)...");
+  console.log("Verifying OPA hidden state and data retention...");
+  const db = getTurso()!;
+
+  // 1. Verify in database: OPA data is NOT removed and hidden = 1
+  const dbOffice = await db.execute("SELECT * FROM offices WHERE code = 'NF12'");
+  assert.equal(dbOffice.rows.length, 1, "NF12 must still exist in offices table");
+  assert.equal(Number(dbOffice.rows[0].hidden), 1, "NF12 hidden column must be 1");
+  assert.equal(dbOffice.rows[0].short, "OPA");
+
+  const collCount = await db.execute("SELECT COUNT(*) as c FROM monthly_collection WHERE office_code = 'NF12'");
+  const gprCount = await db.execute("SELECT COUNT(*) as c FROM monthly_gpr WHERE office_code = 'NF12'");
+  const resCount = await db.execute("SELECT COUNT(*) as c FROM monthly_resolution WHERE office_code = 'NF12'");
+  const sourceCount = await db.execute("SELECT COUNT(*) as c FROM monthly_feedback_source WHERE office_code = 'NF12'");
+  const actionableCount = await db.execute("SELECT COUNT(*) as c FROM actionable_feedback_imports WHERE office_code = 'NF12'");
+
+  assert.equal(Number(collCount.rows[0].c), 10, "All 10 monthly collection records must be preserved");
+  assert.equal(Number(gprCount.rows[0].c), 10, "All 10 monthly GPR records must be preserved");
+  assert.equal(Number(resCount.rows[0].c), 10, "All 10 monthly resolution records must be preserved");
+  assert.equal(Number(sourceCount.rows[0].c), 10, "All 10 monthly source records must be preserved");
+  assert.equal(Number(actionableCount.rows[0].c), 10, "All 10 actionable feedback import records must be preserved");
+  console.log("Data retention in database verified: 10/10 months intact across all tables.");
+
+  // 2. Verify in snapshot: OPA is hidden from the UI / snapshot
   invalidateSnapshot();
   const snap = await getSnapshot();
 
-  // 1. Verify connected and office counts
-  assert.equal(snap.connected, true, "Database should be connected");
-  assert.equal(snap.offices.length, 29, `Expected 29 offices, got ${snap.offices.length}`);
+  assert.equal(snap.offices.length, 28, `Expected 28 active offices, got ${snap.offices.length}`);
+  assert.equal(snap.offices.some((o) => o.code === "NF12"), false, "NF12 must NOT be in snap.offices");
+  assert.equal(snap.initialNFL.some((r) => r.code === "NF12"), false, "NF12 must NOT be in snap.initialNFL");
+  assert.equal(snap.inputResolution.some((r) => r.code === "NF12"), false, "NF12 must NOT be in snap.inputResolution");
+  assert.equal(snap.inputCollection.some((r) => r.code === "NF12"), false, "NF12 must NOT be in snap.inputCollection");
+  assert.equal(snap.inputGpr.some((r) => r.code === "NF12"), false, "NF12 must NOT be in snap.inputGpr");
+  assert.equal(snap.inputTimeliness.some((r) => r.code === "NF12"), false, "NF12 must NOT be in snap.inputTimeliness");
+  console.log("Snapshot verification passed: OPA is completely hidden from application view.");
 
-  const flOffices = snap.offices.filter(o => o.track === "Frontline");
-  const nflOffices = snap.offices.filter(o => o.track === "Non-frontline");
-  assert.equal(flOffices.length, 18, `Expected 18 Frontline offices, got ${flOffices.length}`);
-  assert.equal(nflOffices.length, 11, `Expected 11 Non-frontline offices, got ${nflOffices.length}`);
-
-  // 2. Verify OPA office presence
-  const opa = snap.offices.find(o => o.code === "NF12");
-  assert.ok(opa, "NF12 should exist in offices list");
-  assert.equal(opa.short, "OPA");
-  assert.equal(opa.track, "Non-frontline");
-  assert.equal(opa.focal, "Jeffrey P. Racca");
-  assert.equal(opa.focalPosition, "Administrative Aide I");
-
-  // 3. Verify OPA in initialNFL
-  const opaInitial = snap.initialNFL.find(r => r.code === "NF12");
-  assert.ok(opaInitial, "NF12 should exist in initialNFL");
-  console.log("OPA Initial Row:", {
-    code: opaInitial.code,
-    name: opaInitial.name,
-    resolution: opaInitial.resolution,
-    collection: opaInitial.collection,
-    gpr: opaInitial.gpr,
-    timeliness: opaInitial.timeliness,
-    status: opaInitial.status,
-    total: opaInitial.total,
-  });
-
-  assert.equal(opaInitial.resolution, 1.0, "OPA resolution should be 1.0 (100%)");
-  assert.ok(Math.abs(opaInitial.collection! - 0.8638120699125785) < 1e-6, "OPA collection rate should be ~0.8638");
-  assert.ok(Math.abs(opaInitial.gpr! - 99.966) < 1e-3, "OPA GPR should be 99.966");
-  assert.equal(opaInitial.timeliness, 1.0, "OPA rated timeliness should be 1.0 (100%)");
-  assert.equal(opaInitial.status, "Missing: Timeliness", "OPA should have status 'Missing: Timeliness' due to Month 5 pending submission");
-
-  // 4. Verify input monthly rows
-  const collRow = snap.inputCollection.find(r => r.code === "NF12");
-  assert.ok(collRow, "NF12 should have inputCollection row");
-  assert.deepEqual(collRow.first, [40, 23, 63, 13, 33, 39, 39, 18, 38, 33]);
-  assert.deepEqual(collRow.second, [49, 37, 63, 39, 35, 44, 39, 28, 41, 35]);
-
-  const gprRow = snap.inputGpr.find(r => r.code === "NF12");
-  assert.ok(gprRow, "NF12 should have inputGpr row");
-  assert.deepEqual(gprRow.first, [100, 100, 100, 100, 99.66, 100, 100, 100, 100, 100]);
-
-  const resRow = snap.inputResolution.find(r => r.code === "NF12");
-  assert.ok(resRow, "NF12 should have inputResolution row");
-  assert.deepEqual(resRow.first, [null, null, null, null, 1, null, null, null, null, null]);
-  assert.deepEqual(resRow.second, [0, 0, 0, 0, 1, 0, 0, 0, 0, 0]);
-
-  // 5. Verify checks table
-  const nflCheck = snap.checks.find(c => c.label === "Non-frontline offices");
-  assert.ok(nflCheck, "Checks should include Non-frontline offices");
-  assert.equal(nflCheck.result, "11", "Non-frontline offices count should be 11");
-
-  console.log("\nAll OPA snapshot verifications passed successfully!");
-  getTurso()?.close();
+  db.close();
 }
 
 main().catch((err) => {
-  console.error(err);
+  console.error("Verification failed:", err);
   getTurso()?.close();
   process.exit(1);
 });

@@ -145,7 +145,7 @@ async function fetchSnapshot(): Promise<Snapshot> {
     prizesRes,
   ] = await Promise.all([
     db.execute(
-      "SELECT code, short, full_name, track, focal_name, focal_position, notes, sort_order FROM offices ORDER BY sort_order",
+      "SELECT code, short, full_name, track, focal_name, focal_position, notes, sort_order, COALESCE(hidden, 0) AS hidden FROM offices ORDER BY sort_order",
     ),
     db.execute("SELECT key, value FROM settings"),
     db.execute(
@@ -167,15 +167,17 @@ async function fetchSnapshot(): Promise<Snapshot> {
     ),
   ]);
 
-  const offices: Office[] = officesRes.rows.map((r) => ({
-    code: String(r.code),
-    short: String(r.short),
-    name: String(r.full_name),
-    track: String(r.track),
-    focal: String(r.focal_name ?? ""),
-    focalPosition: String(r.focal_position ?? ""),
-    notes: String(r.notes ?? ""),
-  }));
+  const offices: Office[] = officesRes.rows
+    .filter((r) => Number(r.hidden ?? 0) !== 1)
+    .map((r) => ({
+      code: String(r.code),
+      short: String(r.short),
+      name: String(r.full_name),
+      track: String(r.track),
+      focal: String(r.focal_name ?? ""),
+      focalPosition: String(r.focal_position ?? ""),
+      notes: String(r.notes ?? ""),
+    }));
   const sortOrder = new Map(offices.map((o, i) => [o.code, i]));
 
   const settingsMap: SettingsMap = {};

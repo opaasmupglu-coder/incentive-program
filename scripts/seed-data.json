@@ -288,7 +288,8 @@
       "focal_name": "Jeffrey P. Racca",
       "focal_position": "Administrative Aide I",
       "notes": "Focal name from TABTV — please verify.",
-      "sort_order": 28
+      "sort_order": 28,
+      "hidden": 1
     }
   ],
   "settings": {
